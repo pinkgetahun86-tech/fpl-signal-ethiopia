@@ -1,0 +1,23 @@
+{
+  "name": "fpl-signal-ethiopia",
+  "version": "0.1.0",
+  "description": "FPL Signal Ethiopia - Telegram Mini App for Fantasy Premier League",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "lib/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "type-check": "turbo run type-check"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.3.0"
+  }
+}
