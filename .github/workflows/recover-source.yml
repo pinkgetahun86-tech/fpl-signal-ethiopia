@@ -1,0 +1,96 @@
+name: Recover FPL Signal Ethiopia Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Recover source from Base64
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RECOVERY_FILE="FPL-Signal-Ethiopia-recovery.txt"
+          TMP_B64="/tmp/recovery-payload.b64"
+          TMP_ZIP="/tmp/fpl-signal-recovery.zip"
+
+          if [ ! -f "$RECOVERY_FILE" ]; then
+            echo "ERROR: Recovery file not found."
+            exit 1
+          fi
+
+          echo "Extracting Base64 payload..."
+
+          awk '
+            /^BASE64-BEGIN$/ { found=1; next }
+            /^BASE64-END$/   { found=0; exit }
+            found { print }
+          ' "$RECOVERY_FILE" > "$TMP_B64"
+
+          if [ ! -s "$TMP_B64" ]; then
+            echo "ERROR: Base64 payload is empty."
+            exit 1
+          fi
+
+          echo "Decoding Base64..."
+
+          base64 -d "$TMP_B64" > "$TMP_ZIP"
+
+          echo "Checking ZIP..."
+
+          unzip -t "$TMP_ZIP"
+
+          echo "Extracting source..."
+
+          unzip -q "$TMP_ZIP" -d .
+
+          echo "Verifying project..."
+
+          required=(
+            "package.json"
+            "pnpm-workspace.yaml"
+            "artifacts/api-server"
+            "artifacts/fpl-signal-mini-app"
+            "lib/db"
+            "lib/api-zod"
+            "lib/api-client-react"
+            "lib/api-spec"
+          )
+
+          for path in "${required[@]}"; do
+            if [ ! -e "$path" ]; then
+              echo "ERROR: Missing required path: $path"
+              exit 1
+            fi
+          done
+
+          echo "SOURCE RECOVERY VERIFIED"
+
+          rm -f "$TMP_B64" "$TMP_ZIP" "$RECOVERY_FILE"
+
+      - name: Commit recovered source
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Recover original FPL Signal Ethiopia source"
+          git push
