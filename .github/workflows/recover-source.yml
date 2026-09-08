@@ -1,4 +1,4 @@
-name: Recover FPL Signal Ethiopia Source #1
+. concurrency:name: Recover FPL Signal Ethiopia Source #1
 
 on:
   workflow_dispatch:
