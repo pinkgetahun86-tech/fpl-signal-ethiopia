@@ -39,6 +39,12 @@ lerna-debug.log*
 # Turbo
 .turbo/
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# esbuild test bundles
+*.mjs.tmp
+
 # Database
 *.db
 *.sqlite

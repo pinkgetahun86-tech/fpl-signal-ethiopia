@@ -1,0 +1,275 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: mini-app
+    description: FPL Signal Ethiopia Telegram Mini App
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /mini-app/bootstrap:
+    get:
+      operationId: getMiniAppBootstrap
+      tags: [mini-app]
+      summary: Load the authenticated Telegram Mini App state
+      responses:
+        "200":
+          description: Authenticated Mini App state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MiniAppBootstrap"
+        "401":
+          description: Invalid or missing Telegram init data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /mini-app/team:
+    post:
+      operationId: saveMiniAppTeam
+      tags: [mini-app]
+      summary: Validate and confirm the authenticated user's Weekly Challenge team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MiniAppTeamInput"
+      responses:
+        "200":
+          description: Updated authenticated Mini App state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MiniAppBootstrap"
+        "400":
+          description: Invalid team or locked Gameweek
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or missing Telegram init data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /mini-app/leaderboard/refresh:
+    post:
+      operationId: refreshMiniAppLeaderboard
+      tags: [mini-app]
+      summary: Refresh current Weekly Challenge scores from official FPL live data
+      responses:
+        "200":
+          description: Refreshed authenticated Mini App state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MiniAppBootstrap"
+        "401":
+          description: Invalid or missing Telegram init data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    MiniAppUser:
+      type: object
+      properties:
+        telegramId:
+          type: number
+        firstName:
+          type: ["string", "null"]
+        username:
+          type: ["string", "null"]
+      required: [telegramId, firstName, username]
+    MiniAppGameweek:
+      type: object
+      properties:
+        id:
+          type: number
+        deadlineTime:
+          type: ["string", "null"]
+        locked:
+          type: boolean
+        status:
+          type: string
+      required: [id, deadlineTime, locked, status]
+    MiniAppPlayer:
+      type: object
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        club:
+          type: string
+        clubId:
+          type: number
+        position:
+          type: string
+          enum: [goalkeeper, defender, midfielder, forward]
+        price:
+          type: number
+        status:
+          type: ["string", "null"]
+        chanceOfPlayingThisRound:
+          type: ["number", "null"]
+        totalPoints:
+          type: number
+        minutes:
+          type: number
+      required: [id, name, club, clubId, position, price, status, chanceOfPlayingThisRound, totalPoints, minutes]
+    MiniAppTeam:
+      type: object
+      properties:
+        selectedPlayerIds:
+          type: array
+          items: { type: number }
+        startingPlayerIds:
+          type: array
+          items: { type: number }
+        benchPlayerIds:
+          type: array
+          items: { type: number }
+        captainPlayerId:
+          type: ["number", "null"]
+        viceCaptainPlayerId:
+          type: ["number", "null"]
+        points:
+          type: number
+        pointsSource:
+          type: string
+        scoredPlayerIds:
+          type: array
+          items: { type: number }
+        lastPointsUpdatedAt:
+          type: ["string", "null"]
+        submissionStatus:
+          type: string
+        registered:
+          type: boolean
+      required: [selectedPlayerIds, startingPlayerIds, benchPlayerIds, captainPlayerId, viceCaptainPlayerId, points, pointsSource, scoredPlayerIds, lastPointsUpdatedAt, submissionStatus, registered]
+    MiniAppLeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: number
+        displayName:
+          type: string
+        points:
+          type: number
+        isCurrentUser:
+          type: boolean
+        lastUpdatedAt:
+          type: ["string", "null"]
+      required: [rank, displayName, points, isCurrentUser, lastUpdatedAt]
+    MiniAppSignalItem:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [value, form, differential, captain, injury, price_rise, price_drop]
+        playerId:
+          type: number
+        playerName:
+          type: string
+        position:
+          type: string
+          enum: [goalkeeper, defender, midfielder, forward]
+        club:
+          type: string
+        price:
+          type: number
+        title:
+          type: string
+        detail:
+          type: string
+      required: [kind, playerId, playerName, position, club, price, title, detail]
+    MiniAppSignal:
+      type: object
+      properties:
+        available:
+          type: boolean
+        message:
+          type: string
+        disclaimer:
+          type: string
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MiniAppSignalItem"
+      required: [available, message, disclaimer, signals]
+    MiniAppBootstrap:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/MiniAppUser"
+        gameweek:
+          $ref: "#/components/schemas/MiniAppGameweek"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/MiniAppPlayer"
+        team:
+          $ref: "#/components/schemas/MiniAppTeam"
+        leaderboard:
+          type: array
+          items:
+            $ref: "#/components/schemas/MiniAppLeaderboardEntry"
+        signal:
+          $ref: "#/components/schemas/MiniAppSignal"
+      required: [user, gameweek, players, team, leaderboard, signal]
+    MiniAppTeamInput:
+      type: object
+      properties:
+        selectedPlayerIds:
+          type: array
+          minItems: 15
+          maxItems: 15
+          items: { type: number }
+        startingPlayerIds:
+          type: array
+          minItems: 11
+          maxItems: 11
+          items: { type: number }
+        captainPlayerId:
+          type: number
+        viceCaptainPlayerId:
+          type: number
+      required: [selectedPlayerIds, startingPlayerIds, captainPlayerId, viceCaptainPlayerId]
+

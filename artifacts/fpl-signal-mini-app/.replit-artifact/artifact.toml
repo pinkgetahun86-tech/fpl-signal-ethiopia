@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "FPL Signal Ethiopia"
+description = "A Telegram-native Fantasy Premier League Mini App for Ethiopian FPL players, backed by the existing live scoring and Weekly Challenge services."
+version = "1.0.0"
+id = "artifacts/fpl-signal-mini-app"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18996
+
+[services.development]
+run = "pnpm --filter @workspace/fpl-signal-mini-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fpl-signal-mini-app", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/fpl-signal-mini-app/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18996"
+BASE_PATH = "/"
