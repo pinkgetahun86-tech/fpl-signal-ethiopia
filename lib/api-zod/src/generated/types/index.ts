@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './chapaPaymentCallbackParams';
+export * from './competitionFinalization';
 export * from './errorResponse';
 export * from './healthStatus';
 export * from './miniAppBootstrap';
@@ -20,3 +22,12 @@ export * from './miniAppSignalItemPosition';
 export * from './miniAppTeam';
 export * from './miniAppTeamInput';
 export * from './miniAppUser';
+export * from './paymentInitialization';
+export * from './paymentStatus';
+export * from './paymentStatusStatus';
+export * from './payoutRequest';
+export * from './payoutResponse';
+export * from './settlement';
+export * from './settlementList';
+export * from './webhookAcknowledgement';
+export * from './webhookPayload';

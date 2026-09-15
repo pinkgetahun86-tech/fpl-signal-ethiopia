@@ -332,7 +332,7 @@ const signalKindLabel: Record<string, string> = {
   differential: 'ዲፈረንሻል',
   captain: 'የካፒቴን ምርጫ',
   injury: 'የቆይታ ሁኔታ',
-  price_rise: 'በብዙዎች ዘንድ',
+  price_rise: 'የዋጋ እድገት ክትትል (ግምታዊ)',
   price_drop: 'ዋጋ መቀነስ',
 };
 

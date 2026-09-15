@@ -18,6 +18,14 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Database-backed readiness check
+ */
+export const ReadinessCheckResponse = zod.object({
+  "status": zod.string()
+})
+
+
+/**
  * @summary Load the authenticated Telegram Mini App state
  */
 export const GetMiniAppBootstrapResponse = zod.object({
@@ -223,6 +231,119 @@ export const RefreshMiniAppLeaderboardResponse = zod.object({
   "title": zod.string(),
   "detail": zod.string()
 }))
+})
+})
+
+
+/**
+ * @summary Initialize an optional Chapa payment for the current competition entry
+ */
+export const InitializeMiniAppPaymentResponse = zod.object({
+  "txRef": zod.string(),
+  "checkoutUrl": zod.string(),
+  "amountEtb": zod.number(),
+  "currency": zod.string()
+})
+
+
+/**
+ * @summary Read and, when pending, verify the current competition payment
+ */
+export const GetMiniAppPaymentStatusResponse = zod.object({
+  "status": zod.enum(['not_started', 'pending', 'success', 'failed']),
+  "amountEtb": zod.number(),
+  "currency": zod.string()
+})
+
+
+/**
+ * @summary Verify a Chapa browser callback and redirect to the Mini App
+ */
+export const ChapaPaymentCallbackQueryParams = zod.object({
+  "trx_ref": zod.coerce.string().optional(),
+  "tx_ref": zod.coerce.string().optional()
+})
+
+export const ChapaPaymentCallbackResponse = zod.string()
+
+
+/**
+ * @summary Accept and verify a Chapa payment webhook
+ */
+export const ReceiveChapaPaymentWebhookBody = zod.record(zod.string(), zod.unknown())
+
+export const ReceiveChapaPaymentWebhookResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Finalize a locked paid competition and create prize settlements
+ */
+export const FinalizeGameweekCompetitionParams = zod.object({
+  "competitionId": zod.coerce.string()
+})
+
+export const FinalizeGameweekCompetitionResponse = zod.object({
+  "status": zod.string(),
+  "winners": zod.number()
+})
+
+
+/**
+ * @summary List prize settlements for a competition
+ */
+export const ListGameweekSettlementsParams = zod.object({
+  "competitionId": zod.coerce.string()
+})
+
+export const ListGameweekSettlementsResponse = zod.object({
+  "competitionId": zod.string(),
+  "settlements": zod.array(zod.object({
+  "id": zod.number(),
+  "competitionId": zod.string(),
+  "telegramUserId": zod.number(),
+  "entryId": zod.number(),
+  "rank": zod.number(),
+  "amountEtb": zod.number(),
+  "status": zod.string(),
+  "payoutReference": zod.string().nullable(),
+  "paidAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+})
+
+
+/**
+ * @summary Mark a pending prize settlement as paid
+ */
+export const MarkGameweekSettlementPaidParams = zod.object({
+  "settlementId": zod.coerce.number().int()
+})
+
+export const markGameweekSettlementPaidBodyPayoutReferenceMax = 120;
+
+
+
+export const MarkGameweekSettlementPaidBody = zod.object({
+  "payoutReference": zod.string().min(1).max(markGameweekSettlementPaidBodyPayoutReferenceMax)
+})
+
+export const MarkGameweekSettlementPaidResponse = zod.object({
+  "ok": zod.boolean(),
+  "settlement": zod.object({
+  "id": zod.number(),
+  "competitionId": zod.string(),
+  "telegramUserId": zod.number(),
+  "entryId": zod.number(),
+  "rank": zod.number(),
+  "amountEtb": zod.number(),
+  "status": zod.string(),
+  "payoutReference": zod.string().nullable(),
+  "paidAt": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 })
 

@@ -80,7 +80,23 @@ const basePlayers: FplPlayer[] = [
   assert.equal(result.signals.find((signal) => signal.kind === "captain"), undefined);
 }
 
-// 7. Every signal always carries the disclaimer and never promises points.
+// 7. Price watch remains explicitly heuristic because official price-change
+// data is not available from the current FPL endpoints.
+{
+  const result = buildSignals({
+    players: [
+      ...basePlayers,
+      player({ id: 5, name: "Value Watch", price: 6.5, totalPoints: 70, chanceOfPlayingThisRound: 100 }),
+    ],
+    liveStats: new Map([[5, { minutes: 90, totalPoints: 8 }]]),
+  });
+  const priceWatch = result.signals.find((signal) => signal.kind === "price_rise");
+  assert.ok(priceWatch, "heuristic price watch expected");
+  assert.ok(priceWatch.title.includes("ግምታዊ"));
+  assert.ok(priceWatch.detail.includes("ማረጋገጫ አይደለም"));
+}
+
+// 8. Every signal always carries the disclaimer and never promises points.
 {
   const result = buildSignals({ players: basePlayers });
   assert.ok(result.disclaimer.includes("ዋስትና"));
@@ -91,7 +107,7 @@ const basePlayers: FplPlayer[] = [
   }
 }
 
-// 8. Unavailable players are excluded from value/differential picks.
+// 9. Unavailable players are excluded from value/differential picks.
 {
   const result = buildSignals({
     players: [player({ id: 9, name: "Out Long-term", price: 4.5, totalPoints: 90, status: "u" })],
@@ -99,7 +115,7 @@ const basePlayers: FplPlayer[] = [
   assert.equal(result.signals.find((signal) => signal.kind === "value"), undefined);
 }
 
-// 9. Signals with no qualifying candidates must say data is unavailable.
+// 10. Signals with no qualifying candidates must say data is unavailable.
 {
   const result = buildSignals({
     players: [player({ id: 10, name: "Nobody", price: 6, totalPoints: 2, selectedByPercent: 50 })],

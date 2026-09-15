@@ -745,6 +745,9 @@ function confirmationScreen(
       ? {
           markup: {
             inline_keyboard: [
+              ...(miniAppUrl()
+                ? [[{ text: "✏️ ቡድኔን አስተካክል", callback_data: "edit_team" }]]
+                : []),
               [{ text: "📊 የደረጃ ሰንጠረዥ", callback_data: "leaderboard" }],
               [{ text: "🔄 ደረጃ ሰንጠረዥ አድስ", callback_data: "refresh_leaderboard" }],
             ],
@@ -960,6 +963,19 @@ async function handleCallback(callbackQuery: TelegramCallbackQuery): Promise<voi
 
   if (data === "leaderboard" || data === "refresh_leaderboard") {
     await sendLeaderboardScreen(chatId, user, data === "refresh_leaderboard");
+    return;
+  }
+
+  if (data === "edit_team") {
+    if (user.flowState !== "team_confirmed") return;
+    if (!(await ensureChallengeOpen(chatId))) return;
+    const editingUser = await updateUser(chatId, {
+      flowState: "building_squad",
+      startingPlayerIds: [],
+      captainPlayerId: null,
+      viceCaptainPlayerId: null,
+    });
+    await sendSquadScreen(chatId, editingUser);
     return;
   }
 

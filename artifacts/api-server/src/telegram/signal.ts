@@ -62,7 +62,8 @@ function pointsPerMillion(player: FplPlayer): number | null {
 }
 
 function valueThreshold(player: FplPlayer): number {
-  // Cheap players need fewer points per million to count as good value.
+  // Cheaper players need a higher points-per-million return to count as good
+  // value, while the threshold is capped to avoid extreme price effects.
   return round1(VALUE_BASE_POINTS_PER_MILLION * (7.5 / Math.min(Math.max(player.price, MIN_PRICE), MAX_PRICE)));
 }
 
@@ -157,7 +158,9 @@ export function buildSignals({ players, liveStats }: SignalInput): SignalResult 
       });
     }
 
-    // Price risers/droppers are only knowable when live data is in hand.
+    // The current FPL endpoints do not expose official price-change or
+    // transfer-threshold data. Keep this as a clearly labelled heuristic
+    // value-watch signal rather than presenting it as a confirmed price rise.
     const risers = players
       .filter(
         (player) =>
@@ -175,8 +178,8 @@ export function buildSignals({ players, liveStats }: SignalInput): SignalResult 
         position: riser.position,
         club: riser.club,
         price: riser.price,
-        title: "ለብዙዎች ዝግጁ አጫጫሪ",
-        detail: `£${riser.price.toFixed(1)}m ብቻ ዋጋ ${riser.totalPoints ?? 0} ነጥብ — በብዙ ቡድኖች ውስጥ ይገኛል።`,
+        title: "የዋጋ እድገት ክትትል (ግምታዊ)",
+        detail: `ይህ የዋጋ ለውጥ ማረጋገጫ አይደለም፤ £${riser.price.toFixed(1)}m ዋጋ እና ${riser.totalPoints ?? 0} ነጥብ ላይ የተመሠረተ የዋጋ-ክትትል ግምት ብቻ ነው።`,
       });
     }
   }

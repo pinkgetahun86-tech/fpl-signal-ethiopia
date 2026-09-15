@@ -13,6 +13,74 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface PaymentInitialization {
+  txRef: string;
+  checkoutUrl: string;
+  amountEtb: number;
+  currency: string;
+}
+
+export type PaymentStatusStatus = typeof PaymentStatusStatus[keyof typeof PaymentStatusStatus];
+
+
+export const PaymentStatusStatus = {
+  not_started: 'not_started',
+  pending: 'pending',
+  success: 'success',
+  failed: 'failed',
+} as const;
+
+export interface PaymentStatus {
+  status: PaymentStatusStatus;
+  amountEtb: number;
+  currency: string;
+}
+
+export interface WebhookAcknowledgement {
+  ok: boolean;
+}
+
+export interface WebhookPayload { [key: string]: unknown }
+
+export interface CompetitionFinalization {
+  status: string;
+  winners: number;
+}
+
+export interface Settlement {
+  id: number;
+  competitionId: string;
+  telegramUserId: number;
+  entryId: number;
+  rank: number;
+  amountEtb: number;
+  status: string;
+  /** @nullable */
+  payoutReference: string | null;
+  /** @nullable */
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SettlementList {
+  competitionId: string;
+  settlements: Settlement[];
+}
+
+export interface PayoutRequest {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  payoutReference: string;
+}
+
+export interface PayoutResponse {
+  ok: boolean;
+  settlement: Settlement;
+}
+
 export interface MiniAppUser {
   telegramId: number;
   /** @nullable */
@@ -144,4 +212,9 @@ export interface MiniAppTeamInput {
   captainPlayerId: number;
   viceCaptainPlayerId: number;
 }
+
+export type ChapaPaymentCallbackParams = {
+trx_ref?: string;
+tx_ref?: string;
+};
 

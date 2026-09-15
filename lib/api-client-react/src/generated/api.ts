@@ -20,10 +20,19 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ChapaPaymentCallbackParams,
+  CompetitionFinalization,
   ErrorResponse,
   HealthStatus,
   MiniAppBootstrap,
-  MiniAppTeamInput
+  MiniAppTeamInput,
+  PaymentInitialization,
+  PaymentStatus,
+  PayoutRequest,
+  PayoutResponse,
+  SettlementList,
+  WebhookAcknowledgement,
+  WebhookPayload
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -119,6 +128,83 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReadinessCheckUrl = () => {
+
+
+
+
+  return `/api/readyz`
+}
+
+/**
+ * @summary Database-backed readiness check
+ */
+export const readinessCheck = async ( options?: Parameters<typeof customFetch>[1]): Promise<HealthStatus> => {
+
+  return customFetch<HealthStatus>(getReadinessCheckUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getReadinessCheckQueryKey = () => {
+    return [
+    `/api/readyz`
+    ] as const;
+    }
+
+
+export const getReadinessCheckQueryOptions = <TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getReadinessCheckQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readinessCheck>>> = ({ signal }) => readinessCheck({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ReadinessCheckQueryResult = NonNullable<Awaited<ReturnType<typeof readinessCheck>>>
+export type ReadinessCheckQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Database-backed readiness check
+ */
+
+export function useReadinessCheck<TData = Awaited<ReturnType<typeof readinessCheck>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readinessCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getReadinessCheckQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -348,5 +434,528 @@ export const useRefreshMiniAppLeaderboard = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getRefreshMiniAppLeaderboardMutationOptions(options));
+    }
+
+export const getInitializeMiniAppPaymentUrl = () => {
+
+
+
+
+  return `/api/mini-app/payment/initialize`
+}
+
+/**
+ * @summary Initialize an optional Chapa payment for the current competition entry
+ */
+export const initializeMiniAppPayment = async ( options?: Parameters<typeof customFetch>[1]): Promise<PaymentInitialization> => {
+
+  return customFetch<PaymentInitialization>(getInitializeMiniAppPaymentUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getInitializeMiniAppPaymentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeMiniAppPayment>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeMiniAppPayment>>, TError,void, TContext> => {
+
+const mutationKey = ['initializeMiniAppPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeMiniAppPayment>>, void> = () => {
+
+
+          return  initializeMiniAppPayment(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeMiniAppPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof initializeMiniAppPayment>>>
+
+    export type InitializeMiniAppPaymentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Initialize an optional Chapa payment for the current competition entry
+ */
+export const useInitializeMiniAppPayment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeMiniAppPayment>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializeMiniAppPayment>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getInitializeMiniAppPaymentMutationOptions(options));
+    }
+
+export const getGetMiniAppPaymentStatusUrl = () => {
+
+
+
+
+  return `/api/mini-app/payment/status`
+}
+
+/**
+ * @summary Read and, when pending, verify the current competition payment
+ */
+export const getMiniAppPaymentStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetMiniAppPaymentStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMiniAppPaymentStatusQueryKey = () => {
+    return [
+    `/api/mini-app/payment/status`
+    ] as const;
+    }
+
+
+export const getGetMiniAppPaymentStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMiniAppPaymentStatus>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMiniAppPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMiniAppPaymentStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMiniAppPaymentStatus>>> = ({ signal }) => getMiniAppPaymentStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMiniAppPaymentStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMiniAppPaymentStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMiniAppPaymentStatus>>>
+export type GetMiniAppPaymentStatusQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Read and, when pending, verify the current competition payment
+ */
+
+export function useGetMiniAppPaymentStatus<TData = Awaited<ReturnType<typeof getMiniAppPaymentStatus>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMiniAppPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMiniAppPaymentStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getChapaPaymentCallbackUrl = (params?: ChapaPaymentCallbackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/payments/chapa/callback?${stringifiedParams}` : `/api/payments/chapa/callback`
+}
+
+/**
+ * @summary Verify a Chapa browser callback and redirect to the Mini App
+ */
+export const chapaPaymentCallback = async (params?: ChapaPaymentCallbackParams, options?: Parameters<typeof customFetch>[1]): Promise<string> => {
+
+  return customFetch<string>(getChapaPaymentCallbackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getChapaPaymentCallbackQueryKey = (params?: ChapaPaymentCallbackParams,) => {
+    return [
+    `/api/payments/chapa/callback`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getChapaPaymentCallbackQueryOptions = <TData = Awaited<ReturnType<typeof chapaPaymentCallback>>, TError = ErrorType<void | string>>(params?: ChapaPaymentCallbackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof chapaPaymentCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getChapaPaymentCallbackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof chapaPaymentCallback>>> = ({ signal }) => chapaPaymentCallback(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof chapaPaymentCallback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ChapaPaymentCallbackQueryResult = NonNullable<Awaited<ReturnType<typeof chapaPaymentCallback>>>
+export type ChapaPaymentCallbackQueryError = ErrorType<void | string>
+
+
+/**
+ * @summary Verify a Chapa browser callback and redirect to the Mini App
+ */
+
+export function useChapaPaymentCallback<TData = Awaited<ReturnType<typeof chapaPaymentCallback>>, TError = ErrorType<void | string>>(
+ params?: ChapaPaymentCallbackParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof chapaPaymentCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getChapaPaymentCallbackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReceiveChapaPaymentWebhookUrl = () => {
+
+
+
+
+  return `/api/payments/chapa/webhook`
+}
+
+/**
+ * @summary Accept and verify a Chapa payment webhook
+ */
+export const receiveChapaPaymentWebhook = async (webhookPayload: WebhookPayload, options?: Parameters<typeof customFetch>[1]): Promise<WebhookAcknowledgement> => {
+
+  return customFetch<WebhookAcknowledgement>(getReceiveChapaPaymentWebhookUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(webhookPayload)
+  }
+);}
+
+
+
+
+
+export const getReceiveChapaPaymentWebhookMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>, TError,{data: BodyType<WebhookPayload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>, TError,{data: BodyType<WebhookPayload>}, TContext> => {
+
+const mutationKey = ['receiveChapaPaymentWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>, {data: BodyType<WebhookPayload>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  receiveChapaPaymentWebhook(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceiveChapaPaymentWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>>
+    export type ReceiveChapaPaymentWebhookMutationBody = BodyType<WebhookPayload>
+    export type ReceiveChapaPaymentWebhookMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Accept and verify a Chapa payment webhook
+ */
+export const useReceiveChapaPaymentWebhook = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>, TError,{data: BodyType<WebhookPayload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receiveChapaPaymentWebhook>>,
+        TError,
+        {data: BodyType<WebhookPayload>},
+        TContext
+      > => {
+      return useMutation(getReceiveChapaPaymentWebhookMutationOptions(options));
+    }
+
+export const getFinalizeGameweekCompetitionUrl = (competitionId: string,) => {
+
+
+
+
+  return `/api/admin/gw/${competitionId}/finalize`
+}
+
+/**
+ * @summary Finalize a locked paid competition and create prize settlements
+ */
+export const finalizeGameweekCompetition = async (competitionId: string, options?: Parameters<typeof customFetch>[1]): Promise<CompetitionFinalization> => {
+
+  return customFetch<CompetitionFinalization>(getFinalizeGameweekCompetitionUrl(competitionId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getFinalizeGameweekCompetitionMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeGameweekCompetition>>, TError,{competitionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeGameweekCompetition>>, TError,{competitionId: string}, TContext> => {
+
+const mutationKey = ['finalizeGameweekCompetition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeGameweekCompetition>>, {competitionId: string}> = (props) => {
+          const {competitionId} = props ?? {};
+
+          return  finalizeGameweekCompetition(competitionId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeGameweekCompetitionMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeGameweekCompetition>>>
+
+    export type FinalizeGameweekCompetitionMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Finalize a locked paid competition and create prize settlements
+ */
+export const useFinalizeGameweekCompetition = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeGameweekCompetition>>, TError,{competitionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeGameweekCompetition>>,
+        TError,
+        {competitionId: string},
+        TContext
+      > => {
+      return useMutation(getFinalizeGameweekCompetitionMutationOptions(options));
+    }
+
+export const getListGameweekSettlementsUrl = (competitionId: string,) => {
+
+
+
+
+  return `/api/admin/gw/${competitionId}/settlements`
+}
+
+/**
+ * @summary List prize settlements for a competition
+ */
+export const listGameweekSettlements = async (competitionId: string, options?: Parameters<typeof customFetch>[1]): Promise<SettlementList> => {
+
+  return customFetch<SettlementList>(getListGameweekSettlementsUrl(competitionId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGameweekSettlementsQueryKey = (competitionId: string,) => {
+    return [
+    `/api/admin/gw/${competitionId}/settlements`
+    ] as const;
+    }
+
+
+export const getListGameweekSettlementsQueryOptions = <TData = Awaited<ReturnType<typeof listGameweekSettlements>>, TError = ErrorType<ErrorResponse>>(competitionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGameweekSettlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGameweekSettlementsQueryKey(competitionId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGameweekSettlements>>> = ({ signal }) => listGameweekSettlements(competitionId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: competitionId !== null && competitionId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGameweekSettlements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGameweekSettlementsQueryResult = NonNullable<Awaited<ReturnType<typeof listGameweekSettlements>>>
+export type ListGameweekSettlementsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List prize settlements for a competition
+ */
+
+export function useListGameweekSettlements<TData = Awaited<ReturnType<typeof listGameweekSettlements>>, TError = ErrorType<ErrorResponse>>(
+ competitionId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGameweekSettlements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGameweekSettlementsQueryOptions(competitionId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkGameweekSettlementPaidUrl = (settlementId: number,) => {
+
+
+
+
+  return `/api/admin/gw/settlements/${settlementId}/paid`
+}
+
+/**
+ * @summary Mark a pending prize settlement as paid
+ */
+export const markGameweekSettlementPaid = async (settlementId: number,
+    payoutRequest: PayoutRequest, options?: Parameters<typeof customFetch>[1]): Promise<PayoutResponse> => {
+
+  return customFetch<PayoutResponse>(getMarkGameweekSettlementPaidUrl(settlementId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(payoutRequest)
+  }
+);}
+
+
+
+
+
+export const getMarkGameweekSettlementPaidMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markGameweekSettlementPaid>>, TError,{settlementId: number;data: BodyType<PayoutRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markGameweekSettlementPaid>>, TError,{settlementId: number;data: BodyType<PayoutRequest>}, TContext> => {
+
+const mutationKey = ['markGameweekSettlementPaid'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markGameweekSettlementPaid>>, {settlementId: number;data: BodyType<PayoutRequest>}> = (props) => {
+          const {settlementId,data} = props ?? {};
+
+          return  markGameweekSettlementPaid(settlementId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkGameweekSettlementPaidMutationResult = NonNullable<Awaited<ReturnType<typeof markGameweekSettlementPaid>>>
+    export type MarkGameweekSettlementPaidMutationBody = BodyType<PayoutRequest>
+    export type MarkGameweekSettlementPaidMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Mark a pending prize settlement as paid
+ */
+export const useMarkGameweekSettlementPaid = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markGameweekSettlementPaid>>, TError,{settlementId: number;data: BodyType<PayoutRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markGameweekSettlementPaid>>,
+        TError,
+        {settlementId: number;data: BodyType<PayoutRequest>},
+        TContext
+      > => {
+      return useMutation(getMarkGameweekSettlementPaidMutationOptions(options));
     }
 

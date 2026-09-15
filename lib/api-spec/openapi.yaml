@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: mini-app
     description: FPL Signal Ethiopia Telegram Mini App
+  - name: payments
+    description: Optional Chapa payment callbacks and webhooks
+  - name: admin
+    description: Protected competition settlement operations
 paths:
   /healthz:
     get:
@@ -26,11 +30,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /readyz:
+    get:
+      operationId: readinessCheck
+      tags: [health]
+      summary: Database-backed readiness check
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Database or service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /mini-app/bootstrap:
     get:
       operationId: getMiniAppBootstrap
       tags: [mini-app]
       summary: Load the authenticated Telegram Mini App state
+      security:
+        - telegramInitData: []
       responses:
         "200":
           description: Authenticated Mini App state
@@ -49,6 +73,8 @@ paths:
       operationId: saveMiniAppTeam
       tags: [mini-app]
       summary: Validate and confirm the authenticated user's Weekly Challenge team
+      security:
+        - telegramInitData: []
       requestBody:
         required: true
         content:
@@ -79,6 +105,8 @@ paths:
       operationId: refreshMiniAppLeaderboard
       tags: [mini-app]
       summary: Refresh current Weekly Challenge scores from official FPL live data
+      security:
+        - telegramInitData: []
       responses:
         "200":
           description: Refreshed authenticated Mini App state
@@ -92,7 +120,252 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /mini-app/payment/initialize:
+    post:
+      operationId: initializeMiniAppPayment
+      tags: [mini-app]
+      summary: Initialize an optional Chapa payment for the current competition entry
+      security:
+        - telegramInitData: []
+      responses:
+        "200":
+          description: Chapa checkout initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentInitialization"
+        "400":
+          description: Entry is missing, locked, or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid or missing Telegram init data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Paid competition is not configured or provider initialization failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /mini-app/payment/status:
+    get:
+      operationId: getMiniAppPaymentStatus
+      tags: [mini-app]
+      summary: Read and, when pending, verify the current competition payment
+      security:
+        - telegramInitData: []
+      responses:
+        "200":
+          description: Current payment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatus"
+        "401":
+          description: Invalid or missing Telegram init data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Payment status could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /payments/chapa/callback:
+    get:
+      operationId: chapaPaymentCallback
+      tags: [payments]
+      summary: Verify a Chapa browser callback and redirect to the Mini App
+      parameters:
+        - name: trx_ref
+          in: query
+          required: false
+          schema: { type: string }
+        - name: tx_ref
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment verified when no Mini App redirect is configured
+          content:
+            text/plain:
+              schema: { type: string }
+        "302":
+          description: Redirect to the configured Mini App URL
+          headers:
+            Location:
+              required: true
+              schema: { type: string, format: uri }
+        "400":
+          description: Missing or unsuccessful transaction reference
+          content:
+            text/plain:
+              schema: { type: string }
+        "503":
+          description: Provider verification failed
+          content:
+            text/plain:
+              schema: { type: string }
+  /payments/chapa/webhook:
+    post:
+      operationId: receiveChapaPaymentWebhook
+      tags: [payments]
+      summary: Accept and verify a Chapa payment webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+      responses:
+        "200":
+          description: Webhook accepted or safely reprocessed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAcknowledgement"
+        "400":
+          description: Missing transaction reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Invalid webhook signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Webhook processing failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/gw/{competitionId}/finalize:
+    post:
+      operationId: finalizeGameweekCompetition
+      tags: [admin]
+      summary: Finalize a locked paid competition and create prize settlements
+      security:
+        - adminBearer: []
+      parameters:
+        - name: competitionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Competition finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompetitionFinalization"
+        "400":
+          description: Competition cannot be finalized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/gw/{competitionId}/settlements:
+    get:
+      operationId: listGameweekSettlements
+      tags: [admin]
+      summary: List prize settlements for a competition
+      security:
+        - adminBearer: []
+      parameters:
+        - name: competitionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Competition settlements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Settlements could not be loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/gw/settlements/{settlementId}/paid:
+    post:
+      operationId: markGameweekSettlementPaid
+      tags: [admin]
+      summary: Mark a pending prize settlement as paid
+      security:
+        - adminBearer: []
+      parameters:
+        - name: settlementId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayoutRequest"
+      responses:
+        "200":
+          description: Settlement marked paid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutResponse"
+        "400":
+          description: Invalid payout data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Settlement is not pending or does not exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
+  securitySchemes:
+    telegramInitData:
+      type: apiKey
+      in: header
+      name: X-Telegram-Init-Data
+      description: Raw Telegram Web App initData query string.
+    adminBearer:
+      type: http
+      scheme: bearer
+      description: Server-side admin token.
   schemas:
     HealthStatus:
       type: object
@@ -107,6 +380,98 @@ components:
         error:
           type: string
       required: [error]
+    PaymentInitialization:
+      type: object
+      properties:
+        txRef:
+          type: string
+        checkoutUrl:
+          type: string
+        amountEtb:
+          type: number
+        currency:
+          type: string
+      required: [txRef, checkoutUrl, amountEtb, currency]
+    PaymentStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [not_started, pending, success, failed]
+        amountEtb:
+          type: number
+        currency:
+          type: string
+      required: [status, amountEtb, currency]
+    WebhookAcknowledgement:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+    WebhookPayload:
+      type: object
+      additionalProperties: true
+    CompetitionFinalization:
+      type: object
+      properties:
+        status:
+          type: string
+        winners:
+          type: number
+      required: [status, winners]
+    Settlement:
+      type: object
+      properties:
+        id:
+          type: number
+        competitionId:
+          type: string
+        telegramUserId:
+          type: number
+        entryId:
+          type: number
+        rank:
+          type: number
+        amountEtb:
+          type: number
+        status:
+          type: string
+        payoutReference:
+          type: ["string", "null"]
+        paidAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, competitionId, telegramUserId, entryId, rank, amountEtb, status, payoutReference, paidAt, createdAt, updatedAt]
+    SettlementList:
+      type: object
+      properties:
+        competitionId:
+          type: string
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+      required: [competitionId, settlements]
+    PayoutRequest:
+      type: object
+      properties:
+        payoutReference:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required: [payoutReference]
+    PayoutResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        settlement:
+          $ref: "#/components/schemas/Settlement"
+      required: [ok, settlement]
     MiniAppUser:
       type: object
       properties:
