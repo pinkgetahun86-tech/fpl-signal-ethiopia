@@ -256,15 +256,33 @@ export async function getFplPlayers(): Promise<FplPlayer[]> {
 
 export async function getCurrentGameweek(): Promise<FplGameweek> {
   const gameweeks = (await loadBootstrap()).gameweeks;
+
+  const current = gameweeks.find((gameweek) => gameweek.isCurrent);
+
   const selected =
-    gameweeks.find((gameweek) => gameweek.isCurrent) ??
+    (current &&
+    (current.deadlineTime === null ||
+    Date.now() < current.deadlineTime.getTime())
+    ? current
+    : undefined) ??
     gameweeks.find((gameweek) => gameweek.isNext) ??
-    [...gameweeks].reverse().find((gameweek) => !gameweek.finished) ??
+    [...gameweeks]
+      .reverse()
+      .find(
+        (gameweek) =>
+          !gameweek.finished &&
+          (gameweek.deadlineTime === null ||
+          Date.now() < gameweek.deadlineTime.getTime()),
+      ) ??
+    current ??
     [...gameweeks].reverse()[0];
-  if (!selected) throw new Error("FPL bootstrap did not include a gameweek");
+
+  if (!selected) {
+    throw new Error("FPL bootstrap did not include a gameweek");
+  }
+
   return selected;
 }
-
 export async function getLiveGameweekStats(
   gameweek: number,
 ): Promise<Map<number, FplLivePlayerStats>> {
