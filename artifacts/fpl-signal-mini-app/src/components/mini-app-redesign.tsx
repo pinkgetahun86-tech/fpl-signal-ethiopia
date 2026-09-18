@@ -119,6 +119,65 @@ function extractApiErrorMessage(error: unknown): string | null {
   return typeof message === 'string' && message.trim() ? message.trim() : null;
 }
 
+type MiniAppDraft = {
+  userId: number;
+  gameweekId: number;
+  selectedPlayerIds: number[];
+  startingPlayerIds: number[];
+  captainPlayerId: number | null;
+  viceCaptainPlayerId: number | null;
+  savedAt: number;
+};
+
+const draftKeyPrefix = 'fpl-signal-draft:';
+
+function getDraftKey(userId: number, gameweekId: number) {
+  return `${draftKeyPrefix}${userId}:${gameweekId}`;
+}
+
+function clearUserDrafts(userId: number, keepKey?: string) {
+  if (typeof window === 'undefined') return;
+  const prefix = getDraftKey(userId, 0).slice(0, -1);
+  try {
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      if (key?.startsWith(prefix) && key !== keepKey) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Local storage may be unavailable in private browsing; the server remains authoritative.
+  }
+}
+
+function readDraft(key: string, userId: number, gameweekId: number, validIds: Set<number>): MiniAppDraft | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const draft = parsed as Partial<MiniAppDraft>;
+    if (draft.userId !== userId || draft.gameweekId !== gameweekId || !Array.isArray(draft.selectedPlayerIds)) return null;
+    const ids = (value: unknown[]) => [
+      ...new Set(value.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && validIds.has(id))),
+    ];
+    const selectedPlayerIds = ids(draft.selectedPlayerIds).slice(0, 15);
+    const startingPlayerIds = ids(Array.isArray(draft.startingPlayerIds) ? draft.startingPlayerIds : []).filter((id) => selectedPlayerIds.includes(id)).slice(0, 11);
+    const captainPlayerId =
+      typeof draft.captainPlayerId === 'number' && Number.isInteger(draft.captainPlayerId) && startingPlayerIds.includes(draft.captainPlayerId)
+        ? draft.captainPlayerId
+        : null;
+    const viceCaptainPlayerId =
+      typeof draft.viceCaptainPlayerId === 'number' &&
+      Number.isInteger(draft.viceCaptainPlayerId) &&
+      startingPlayerIds.includes(draft.viceCaptainPlayerId)
+        ? draft.viceCaptainPlayerId
+        : null;
+    return { userId, gameweekId, selectedPlayerIds, startingPlayerIds, captainPlayerId, viceCaptainPlayerId, savedAt: typeof draft.savedAt === 'number' ? draft.savedAt : Date.now() };
+  } catch {
+    return null;
+  }
+}
+
 function LogoMark({ small = false }: { small?: boolean }) {
   return (
     <div className={cn('brand-mark', small && 'brand-mark-small')} data-testid="brand-mark">
@@ -322,12 +381,14 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
       <section className="simple-card">
         <div className="card-heading"><div><p className="eyebrow">የሚቀጥለው እርምጃ</p><h2>ቡድንዎን ያጠናቅቁ</h2></div><Target className="heading-icon" /></div>
         <div className="step-list">
-          {[
-            ['01', '15 ተጫዋቾች ይምረጡ', teamCount === 15],
-            ['02', 'ቋሚ 11 ያዘጋጁ', data.team.startingPlayerIds.length === 11],
-            ['03', 'ካፒቴን እና ምክትል ይምረጡ', !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId],
-            ['04', 'ቡድንዎን ያረጋግጡ', isReady && data.team.registered],
-          ].map(([number, label, complete]) => (
+          {(
+            [
+              ['01', '15 ተጫዋቾች ይምረጡ', teamCount === 15],
+              ['02', 'ቋሚ 11 ያዘጋጁ', data.team.startingPlayerIds.length === 11],
+              ['03', 'ካፒቴን እና ምክትል ይምረጡ', !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId],
+              ['04', 'ቡድንዎን ያረጋግጡ', isReady && data.team.registered],
+            ] as Array<[string, string, boolean]>
+          ).map(([number, label, complete]) => (
             <div key={number} className={cn('step-row', complete && 'step-row-complete')}>
               <span className="step-number">{complete ? <Check className="h-4 w-4" /> : number}</span>
               <span>{label}</span>
@@ -482,6 +543,9 @@ function ChallengePage({ data, update }: { data: MiniAppBootstrap; update: (next
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const saveTeam = useSaveMiniAppTeam();
   const byId = useMemo(() => new Map(data.players.map((player) => [player.id, player])), [data.players]);
+  const validPlayerIds = useMemo(() => new Set(data.players.map((player) => player.id)), [data.players]);
+  const draftKey = useMemo(() => getDraftKey(data.user.telegramId, data.gameweek.id), [data.user.telegramId, data.gameweek.id]);
+  const [draftScope, setDraftScope] = useState<string | null>(null);
   const selectedPlayers = selected.map((id) => byId.get(id)).filter(Boolean) as MiniAppPlayer[];
   const starterPlayers = starters.map((id) => byId.get(id)).filter(Boolean) as MiniAppPlayer[];
   const budgetUsed = selectedPlayers.reduce((sum, player) => sum + player.price, 0);
@@ -489,6 +553,65 @@ function ChallengePage({ data, update }: { data: MiniAppBootstrap; update: (next
   const canMoveToXi = selected.length === 15;
   const canMoveToCaptains = starters.length === 11;
   const canConfirm = starters.length === 11 && !!captain && !!vice && captain !== vice;
+
+  useEffect(() => {
+    setDraftScope(null);
+    setSelected(data.team.selectedPlayerIds);
+    setStarters(data.team.startingPlayerIds);
+    setCaptain(data.team.captainPlayerId);
+    setVice(data.team.viceCaptainPlayerId);
+
+    if (typeof window === 'undefined') {
+      setDraftScope(draftKey);
+      return;
+    }
+
+    const shouldRestoreDraft = !locked && !data.team.registered;
+    clearUserDrafts(data.user.telegramId, shouldRestoreDraft ? draftKey : undefined);
+    if (shouldRestoreDraft) {
+      const draft = readDraft(draftKey, data.user.telegramId, data.gameweek.id, validPlayerIds);
+      if (draft) {
+        setSelected(draft.selectedPlayerIds);
+        setStarters(draft.startingPlayerIds);
+        setCaptain(draft.captainPlayerId);
+        setVice(draft.viceCaptainPlayerId);
+      }
+    }
+    setDraftScope(draftKey);
+  }, [
+    data.gameweek.id,
+    data.team.captainPlayerId,
+    data.team.registered,
+    data.team.selectedPlayerIds,
+    data.team.startingPlayerIds,
+    data.team.viceCaptainPlayerId,
+    data.user.telegramId,
+    draftKey,
+    locked,
+    validPlayerIds,
+  ]);
+
+  useEffect(() => {
+    if (draftScope !== draftKey || typeof window === 'undefined') return;
+    if (locked || data.team.registered) {
+      clearUserDrafts(data.user.telegramId);
+      return;
+    }
+    const draft: MiniAppDraft = {
+      userId: data.user.telegramId,
+      gameweekId: data.gameweek.id,
+      selectedPlayerIds: selected,
+      startingPlayerIds: starters,
+      captainPlayerId: captain,
+      viceCaptainPlayerId: vice,
+      savedAt: Date.now(),
+    };
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify(draft));
+    } catch {
+      // Local storage may be unavailable; the current in-memory selection still works.
+    }
+  }, [captain, data.gameweek.id, data.team.registered, data.user.telegramId, draftKey, draftScope, locked, selected, starters, vice]);
 
   const toggleSelected = (id: number) => {
     if (locked) return;
@@ -528,7 +651,12 @@ function ChallengePage({ data, update }: { data: MiniAppBootstrap; update: (next
     setPaymentError(null);
     saveTeam.mutate(
       { data: { selectedPlayerIds: selected, startingPlayerIds: starters, captainPlayerId: captain!, viceCaptainPlayerId: vice! } },
-      { onSuccess: update },
+      {
+        onSuccess: (next) => {
+          clearUserDrafts(data.user.telegramId);
+          update(next);
+        },
+      },
     );
   };
 
