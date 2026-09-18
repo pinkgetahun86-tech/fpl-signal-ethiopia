@@ -157,11 +157,21 @@ function readDraft(key: string, userId: number, gameweekId: number, validIds: Se
     if (!parsed || typeof parsed !== 'object') return null;
     const draft = parsed as Partial<MiniAppDraft>;
     if (draft.userId !== userId || draft.gameweekId !== gameweekId || !Array.isArray(draft.selectedPlayerIds)) return null;
-    const ids = (value: unknown[]) => [...new Set(value.filter((id): id is number => Number.isInteger(id) && validIds.has(id)))];
+    const ids = (value: unknown[]) => [
+      ...new Set(value.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && validIds.has(id))),
+    ];
     const selectedPlayerIds = ids(draft.selectedPlayerIds).slice(0, 15);
     const startingPlayerIds = ids(Array.isArray(draft.startingPlayerIds) ? draft.startingPlayerIds : []).filter((id) => selectedPlayerIds.includes(id)).slice(0, 11);
-    const captainPlayerId = Number.isInteger(draft.captainPlayerId) && startingPlayerIds.includes(draft.captainPlayerId) ? draft.captainPlayerId : null;
-    const viceCaptainPlayerId = Number.isInteger(draft.viceCaptainPlayerId) && startingPlayerIds.includes(draft.viceCaptainPlayerId) ? draft.viceCaptainPlayerId : null;
+    const captainPlayerId =
+      typeof draft.captainPlayerId === 'number' && Number.isInteger(draft.captainPlayerId) && startingPlayerIds.includes(draft.captainPlayerId)
+        ? draft.captainPlayerId
+        : null;
+    const viceCaptainPlayerId =
+      typeof draft.viceCaptainPlayerId === 'number' &&
+      Number.isInteger(draft.viceCaptainPlayerId) &&
+      startingPlayerIds.includes(draft.viceCaptainPlayerId)
+        ? draft.viceCaptainPlayerId
+        : null;
     return { userId, gameweekId, selectedPlayerIds, startingPlayerIds, captainPlayerId, viceCaptainPlayerId, savedAt: typeof draft.savedAt === 'number' ? draft.savedAt : Date.now() };
   } catch {
     return null;
@@ -371,12 +381,14 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
       <section className="simple-card">
         <div className="card-heading"><div><p className="eyebrow">የሚቀጥለው እርምጃ</p><h2>ቡድንዎን ያጠናቅቁ</h2></div><Target className="heading-icon" /></div>
         <div className="step-list">
-          {[
-            ['01', '15 ተጫዋቾች ይምረጡ', teamCount === 15],
-            ['02', 'ቋሚ 11 ያዘጋጁ', data.team.startingPlayerIds.length === 11],
-            ['03', 'ካፒቴን እና ምክትል ይምረጡ', !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId],
-            ['04', 'ቡድንዎን ያረጋግጡ', isReady && data.team.registered],
-          ].map(([number, label, complete]) => (
+          {(
+            [
+              ['01', '15 ተጫዋቾች ይምረጡ', teamCount === 15],
+              ['02', 'ቋሚ 11 ያዘጋጁ', data.team.startingPlayerIds.length === 11],
+              ['03', 'ካፒቴን እና ምክትል ይምረጡ', !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId],
+              ['04', 'ቡድንዎን ያረጋግጡ', isReady && data.team.registered],
+            ] as Array<[string, string, boolean]>
+          ).map(([number, label, complete]) => (
             <div key={number} className={cn('step-row', complete && 'step-row-complete')}>
               <span className="step-number">{complete ? <Check className="h-4 w-4" /> : number}</span>
               <span>{label}</span>
