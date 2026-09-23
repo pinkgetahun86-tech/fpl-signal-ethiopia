@@ -1286,18 +1286,22 @@ export function MiniApp() {
   const update = useCallback((next: MiniAppBootstrap) => {
     queryClient.setQueryData(getGetMiniAppBootstrapQueryKey(), next);
   }, [queryClient]);
-
+  
   const page = location === '/challenge'
-    ? <ChallengePage data={data} update={update} />
-    : location === '/team'
-      ? <TeamPage data={data} />
-      : location === '/leaderboard'
-        ? <LeaderboardPage data={data} update={update} />
-        : location === '/points'
-          ? <PointsPage data={data} />
-          : location === '/signal'
-            ? <SignalPage data={data} />
-            : location === '/about'function WalletPage() {
+  ? <ChallengePage data={data} update={update} />
+  : location === '/team'
+    ? <TeamPage data={data} />
+    : location === '/leaderboard'
+      ? <LeaderboardPage data={data} update={update} />
+      : location === '/points'
+        ? <PointsPage data={data} />
+        : location === '/signal'
+          ? <SignalPage data={data} />
+          : location === '/wallet'
+  ? <WalletPage />
+  : location === '/about'
+    ? <AboutPage />
+    : <HomePage data={data} />;
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [deposits, setDeposits] = useState<WalletDeposit[]>([]);
