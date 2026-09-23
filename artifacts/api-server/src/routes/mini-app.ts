@@ -1,6 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request } from "express";
-import { and, eq } from "drizzle-orm";
+import {
+  db,
+  gwPrizeSettlements,
+  weeklyChallengeEntries,
+  walletDeposits,
+} from "@workspace/db";
 import { db, gwPrizeSettlements, weeklyChallengeEntries } from "@workspace/db";
 import { GetMiniAppBootstrapResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
@@ -22,7 +27,15 @@ import {
   verifyChapaWebhookSignature,
 } from "../telegram/gw-payment";
 import { finalizeCompetition, markPrizePaid } from "../telegram/gw-settlement";
-
+import {
+  approveWalletDeposit,
+  createManualTelebirrDeposit,
+  getWallet,
+  getWalletTransactions,
+  joinWeeklyChallengeWithWallet,
+  listUserDeposits,
+  rejectWalletDeposit,
+} from "../telegram/wallet";
 const router: IRouter = Router();
 
 function errorMessage(error: unknown): string {
@@ -114,7 +127,197 @@ router.get("/mini-app/payment/status", async (req, res) => {
     res.status(status).json({ error: errorMessage(error) });
   }
 });
+router.get("/mini-app/wallet", async (req, res) => {
+  try {
+    const user = await authenticatedUser(req);
+    const wallet = await getWallet(user.id);
 
+    return res.json({
+      balanceEtb: wallet.balanceEtb,
+      currency: "ETB",
+    });
+  } catch (error) {
+    const status =
+      error instanceof MiniAppAuthError
+        ? error.status
+        : 503;
+
+    return res.status(status).json({
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.get("/mini-app/wallet/transactions", async (req, res) => {
+  try {
+    const user = await authenticatedUser(req);
+    const transactions = await getWalletTransactions(user.id);
+
+    return res.json({
+      transactions: transactions.map((item) => ({
+        id: item.id,
+        type: item.type,
+        amountEtb: item.amountEtb,
+        balanceAfterEtb: item.balanceAfterEtb,
+        reference: item.reference,
+        description: item.description,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    const status =
+      error instanceof MiniAppAuthError
+        ? error.status
+        : 503;
+
+    return res.status(status).json({
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.get("/mini-app/wallet/deposits", async (req, res) => {
+  try {
+    const user = await authenticatedUser(req);
+    const deposits = await listUserDeposits(user.id);
+
+    return res.json({
+      deposits: deposits.map((item) => ({
+        id: item.id,
+        method: item.method,
+        amountEtb: item.amountEtb,
+        transactionReference: item.transactionReference,
+        status: item.status,
+        adminNote: item.adminNote,
+        approvedAt: item.approvedAt?.toISOString() ?? null,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    const status =
+      error instanceof MiniAppAuthError
+        ? error.status
+        : 503;
+
+    return res.status(status).json({
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.post("/mini-app/wallet/deposit/telebirr", async (req, res) => {
+  try {
+    const user = await authenticatedUser(req);
+
+    const amountEtb = Number(req.body?.amountEtb);
+    const transactionReference =
+      typeof req.body?.transactionReference === "string"
+        ? req.body.transactionReference.trim()
+        : "";
+
+    if (
+      !Number.isSafeInteger(amountEtb) ||
+      amountEtb <= 0 ||
+      !transactionReference
+    ) {
+      throw new MiniAppRequestError(
+        "የገንዘብ መጠን እና የTelebirr Transaction Reference ትክክል ያስገቡ።",
+      );
+    }
+
+    const deposit = await createManualTelebirrDeposit(
+      user,
+      amountEtb,
+      transactionReference,
+    );
+
+    return res.status(201).json({
+      id: deposit.id,
+      status: deposit.status,
+      amountEtb: deposit.amountEtb,
+      transactionReference: deposit.transactionReference,
+      method: deposit.method,
+    });
+  } catch (error) {
+    const status =
+      error instanceof MiniAppAuthError
+        ? error.status
+        : error instanceof MiniAppRequestError
+          ? error.status
+          : 503;
+
+    return res.status(status).json({
+      error: errorMessage(error),
+    });
+  }
+});
+
+router.post("/mini-app/wallet/entry", async (req, res) => {
+  try {
+    const user = await authenticatedUser(req);
+    const challenge = await getCurrentChallenge();
+
+    if (challenge.locked) {
+      throw new MiniAppRequestError(
+        "🔒 የዚህ ሳምንት ምዝገባ ተዘግቷል።",
+      );
+    }
+
+    const competition = await ensureGwCompetition(challenge);
+
+    const entry = await db
+      .select({ id: weeklyChallengeEntries.id })
+      .from(weeklyChallengeEntries)
+      .where(
+        and(
+          eq(weeklyChallengeEntries.telegramUserId, user.id),
+          eq(
+            weeklyChallengeEntries.competitionId,
+            challenge.competitionId,
+          ),
+        ),
+      )
+      .limit(1);
+
+    if (!entry[0]) {
+      throw new MiniAppRequestError(
+        "መጀመሪያ የውድድሩን ቡድን ያስቀምጡ።",
+      );
+    }
+
+    const result = await joinWeeklyChallengeWithWallet(
+      competition.id,
+      user.id,
+      entry[0].id,
+    );
+
+    const state = await buildMiniAppState(user, challenge);
+
+    return res.json({
+      ...state,
+      wallet: {
+        balanceEtb: (await getWallet(user.id)).balanceEtb,
+        currency: "ETB",
+      },
+      payment: {
+        method: "wallet",
+        status: result.alreadyConfirmed ? "success" : "success",
+        amountEtb: competition.entryFeeEtb,
+      },
+    });
+  } catch (error) {
+    const status =
+      error instanceof MiniAppAuthError
+        ? error.status
+        : error instanceof MiniAppRequestError
+          ? error.status
+          : 503;
+
+    return res.status(status).json({
+      error: errorMessage(error),
+    });
+  }
+});
 router.get("/payments/chapa/callback", async (req, res) => {
   const txRef = typeof req.query.trx_ref === "string" ? req.query.trx_ref : typeof req.query.tx_ref === "string" ? req.query.tx_ref : "";
   if (!txRef) return res.status(400).send("የክፍያ መለያ አልተገኘም።");
@@ -128,7 +331,93 @@ router.get("/payments/chapa/callback", async (req, res) => {
     return res.status(503).send("ክፍያውን ማረጋገጥ አልተቻለም።");
   }
 });
+router.get("/admin/wallet/deposits", async (req, res) => {
+  if (!requireAdmin(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
+  try {
+    const limitRaw = Number(req.query.limit ?? 100);
+    const limit = Number.isSafeInteger(limitRaw)
+      ? Math.min(Math.max(limitRaw, 1), 200)
+      : 100;
+
+    const deposits = await db
+      .select()
+      .from(walletDeposits)
+      .orderBy(desc(walletDeposits.id))
+      .limit(limit);
+
+    return res.json({ deposits });
+  } catch (error) {
+    logger.error({ error }, "Could not load wallet deposits");
+    return res.status(500).json({
+      error: "Could not load wallet deposits",
+    });
+  }
+});
+
+router.post("/admin/wallet/deposits/:depositId/approve", async (req, res) => {
+  if (!requireAdmin(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const depositId = Number(req.params.depositId);
+    const adminNote =
+      typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : undefined;
+
+    const deposit = await approveWalletDeposit(
+      depositId,
+      adminNote,
+    );
+
+    return res.json({
+      ok: true,
+      deposit,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not approve deposit",
+    });
+  }
+});
+
+router.post("/admin/wallet/deposits/:depositId/reject", async (req, res) => {
+  if (!requireAdmin(req)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const depositId = Number(req.params.depositId);
+    const adminNote =
+      typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : undefined;
+
+    const deposit = await rejectWalletDeposit(
+      depositId,
+      adminNote,
+    );
+
+    return res.json({
+      ok: true,
+      deposit,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not reject deposit",
+    });
+  }
+});
 router.post("/payments/chapa/webhook", async (req, res) => {
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body));
   if (!verifyChapaWebhookSignature(rawBody, req.headers)) return res.status(401).json({ error: "Unauthorized" });
