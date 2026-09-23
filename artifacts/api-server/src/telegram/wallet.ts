@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   gwCompetitions,
+  gwPayments,
   walletAccounts,
   walletDeposits,
   walletTransactions,
@@ -12,6 +13,12 @@ import {
 
 export const MANUAL_TELEBIRR_METHOD = "telebirr_manual";
 
+/**
+ * Only this percentage of each entry fee goes into the prize pool.
+ * The remaining 30% is project revenue.
+ */
+export const PRIZE_POOL_SHARE_PERCENT = 70;
+
 function assertPositiveEtb(amountEtb: number): number {
   if (!Number.isSafeInteger(amountEtb) || amountEtb <= 0) {
     throw new Error("የገንዘብ መጠኑ ትክክል አይደለም።");
@@ -21,10 +28,20 @@ function assertPositiveEtb(amountEtb: number): number {
 
 function cleanReference(reference: string): string {
   const value = reference.trim();
+
   if (!value || value.length > 120) {
     throw new Error("የTransaction reference ትክክል አይደለም።");
   }
+
   return value;
+}
+
+export function calculatePrizePoolContribution(entryFeeEtb: number): number {
+  const amount = assertPositiveEtb(entryFeeEtb);
+
+  return Math.floor(
+    (amount * PRIZE_POOL_SHARE_PERCENT) / 100,
+  );
 }
 
 async function ensureWallet(
@@ -44,7 +61,10 @@ async function ensureWallet(
     .where(eq(walletAccounts.telegramUserId, userId))
     .limit(1);
 
-  if (!rows[0]) throw new Error("Wallet መፍጠር አልተቻለም።");
+  if (!rows[0]) {
+    throw new Error("Wallet መፍጠር አልተቻለም።");
+  }
+
   return rows[0];
 }
 
@@ -52,8 +72,15 @@ export async function getWallet(userId: number): Promise<WalletAccount> {
   return db.transaction(async (tx) => ensureWallet(tx, userId));
 }
 
-export async function getWalletTransactions(userId: number, limit = 30) {
-  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+export async function getWalletTransactions(
+  userId: number,
+  limit = 30,
+) {
+  const safeLimit = Math.min(
+    Math.max(Math.trunc(limit), 1),
+    100,
+  );
+
   const wallet = await getWallet(userId);
 
   return db
@@ -64,8 +91,14 @@ export async function getWalletTransactions(userId: number, limit = 30) {
     .limit(safeLimit);
 }
 
-export async function listUserDeposits(userId: number, limit = 20) {
-  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+export async function listUserDeposits(
+  userId: number,
+  limit = 20,
+) {
+  const safeLimit = Math.min(
+    Math.max(Math.trunc(limit), 1),
+    50,
+  );
 
   return db
     .select()
@@ -89,11 +122,18 @@ export async function createManualTelebirrDeposit(
     const duplicate = await tx
       .select({ id: walletDeposits.id })
       .from(walletDeposits)
-      .where(eq(walletDeposits.transactionReference, reference))
+      .where(
+        eq(
+          walletDeposits.transactionReference,
+          reference,
+        ),
+      )
       .limit(1);
 
     if (duplicate[0]) {
-      throw new Error("ይህ የTelebirr ግብይት መለያ አስቀድሞ ተጠቅመዋል።");
+      throw new Error(
+        "ይህ የTelebirr ግብይት መለያ አስቀድሞ ተጠቅመዋል።",
+      );
     }
 
     const rows = await tx
@@ -108,7 +148,12 @@ export async function createManualTelebirrDeposit(
       })
       .returning();
 
-    if (!rows[0]) throw new Error("የDeposit ጥያቄውን ማስቀመጥ አልተቻለም።");
+    if (!rows[0]) {
+      throw new Error(
+        "የDeposit ጥያቄውን ማስቀመጥ አልተቻለም።",
+      );
+    }
+
     return rows[0];
   });
 }
@@ -135,14 +180,24 @@ export async function approveWalletDeposit(
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!deposit) throw new Error("Deposit አልተገኘም።");
-    if (deposit.status === "approved") return deposit;
-
-    if (deposit.status !== "pending") {
-      throw new Error("ይህ Deposit ከዚህ በኋላ ሊፀድቅ አይችልም።");
+    if (!deposit) {
+      throw new Error("Deposit አልተገኘም።");
     }
 
-    const wallet = await ensureWallet(tx, deposit.telegramUserId);
+    if (deposit.status === "approved") {
+      return deposit;
+    }
+
+    if (deposit.status !== "pending") {
+      throw new Error(
+        "ይህ Deposit ከዚህ በኋላ ሊፀድቅ አይችልም።",
+      );
+    }
+
+    const wallet = await ensureWallet(
+      tx,
+      deposit.telegramUserId,
+    );
 
     const walletRows = await tx
       .update(walletAccounts)
@@ -154,19 +209,26 @@ export async function approveWalletDeposit(
       .returning();
 
     const balanceAfter = walletRows[0]?.balanceEtb;
+
     if (balanceAfter === undefined) {
       throw new Error("Wallet ማዘመን አልተቻለም።");
     }
 
-    await tx.insert(walletTransactions).values({
-      walletAccountId: wallet.id,
-      telegramUserId: deposit.telegramUserId,
-      type: "deposit",
-      amountEtb: deposit.amountEtb,
-      balanceAfterEtb: balanceAfter,
-      reference: `wallet-deposit:${deposit.id}`,
-      description: `Manual Telebirr deposit ${deposit.transactionReference}`,
-    });
+    await tx
+      .insert(walletTransactions)
+      .values({
+        walletAccountId: wallet.id,
+        telegramUserId: deposit.telegramUserId,
+        type: "deposit",
+        amountEtb: deposit.amountEtb,
+        balanceAfterEtb: balanceAfter,
+        reference: `wallet-deposit:${deposit.id}`,
+        description:
+          `Manual Telebirr deposit ${deposit.transactionReference}`,
+      })
+      .onConflictDoNothing({
+        target: walletTransactions.reference,
+      });
 
     const updated = await tx
       .update(walletDeposits)
@@ -184,7 +246,12 @@ export async function approveWalletDeposit(
       )
       .returning();
 
-    if (!updated[0]) throw new Error("Deposit ማፅደቅ አልተቻለም።");
+    if (!updated[0]) {
+      throw new Error(
+        "Deposit ማፅደቅ አልተቻለም።",
+      );
+    }
+
     return updated[0];
   });
 }
@@ -211,11 +278,18 @@ export async function rejectWalletDeposit(
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!deposit) throw new Error("Deposit አልተገኘም።");
-    if (deposit.status === "rejected") return deposit;
+    if (!deposit) {
+      throw new Error("Deposit አልተገኘም።");
+    }
+
+    if (deposit.status === "rejected") {
+      return deposit;
+    }
 
     if (deposit.status !== "pending") {
-      throw new Error("ይህ Deposit ከዚህ በኋላ ሊከለከል አይችልም።");
+      throw new Error(
+        "ይህ Deposit ከዚህ በኋላ ሊከለከል አይችልም።",
+      );
     }
 
     const updated = await tx
@@ -233,7 +307,12 @@ export async function rejectWalletDeposit(
       )
       .returning();
 
-    if (!updated[0]) throw new Error("Deposit መከልከል አልተቻለም።");
+    if (!updated[0]) {
+      throw new Error(
+        "Deposit መከልከል አልተቻለም።",
+      );
+    }
+
     return updated[0];
   });
 }
@@ -254,7 +333,9 @@ export async function debitWallet(
       .where(eq(walletTransactions.reference, clean))
       .limit(1);
 
-    if (existing[0]) return existing[0];
+    if (existing[0]) {
+      return existing[0];
+    }
 
     const wallet = await ensureWallet(tx, userId);
 
@@ -273,7 +354,9 @@ export async function debitWallet(
       .returning();
 
     if (!updated[0]) {
-      throw new Error("የWallet ቀሪ ሂሳብ በቂ አይደለም።");
+      throw new Error(
+        "የWallet ቀሪ ሂሳብ በቂ አይደለም።",
+      );
     }
 
     const ledger = await tx
@@ -289,7 +372,12 @@ export async function debitWallet(
       })
       .returning();
 
-    if (!ledger[0]) throw new Error("የWallet transaction ማስቀመጥ አልተቻለም።");
+    if (!ledger[0]) {
+      throw new Error(
+        "የWallet transaction ማስቀመጥ አልተቻለም።",
+      );
+    }
+
     return ledger[0];
   });
 }
@@ -310,7 +398,9 @@ export async function creditWallet(
       .where(eq(walletTransactions.reference, clean))
       .limit(1);
 
-    if (existing[0]) return existing[0];
+    if (existing[0]) {
+      return existing[0];
+    }
 
     const wallet = await ensureWallet(tx, userId);
 
@@ -323,7 +413,9 @@ export async function creditWallet(
       .where(eq(walletAccounts.id, wallet.id))
       .returning();
 
-    if (!updated[0]) throw new Error("Wallet ማዘመን አልተቻለም።");
+    if (!updated[0]) {
+      throw new Error("Wallet ማዘመን አልተቻለም።");
+    }
 
     const ledger = await tx
       .insert(walletTransactions)
@@ -338,7 +430,12 @@ export async function creditWallet(
       })
       .returning();
 
-    if (!ledger[0]) throw new Error("የWallet transaction ማስቀመጥ አልተቻለም።");
+    if (!ledger[0]) {
+      throw new Error(
+        "የWallet transaction ማስቀመጥ አልተቻለም።",
+      );
+    }
+
     return ledger[0];
   });
 }
@@ -349,9 +446,13 @@ export async function joinWeeklyChallengeWithWallet(
   entryId: number,
 ) {
   return db.transaction(async (tx) => {
+    /**
+     * Same lock used by Chapa initialization.
+     * This makes Wallet and Chapa mutually exclusive.
+     */
     await tx.execute(
       sql`select pg_advisory_xact_lock(
-        hashtext(${`fpl-wallet-entry:${competitionId}:${userId}`})
+        hashtext(${`fpl-payment:${competitionId}:${userId}`})
       )`,
     );
 
@@ -362,7 +463,10 @@ export async function joinWeeklyChallengeWithWallet(
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!competition) throw new Error("ውድድሩ አልተገኘም።");
+    if (!competition) {
+      throw new Error("ውድድሩ አልተገኘም።");
+    }
+
     if (competition.status !== "open") {
       throw new Error("የዚህ ሳምንት ውድድር ተዘግቷል።");
     }
@@ -381,19 +485,51 @@ export async function joinWeeklyChallengeWithWallet(
         and(
           eq(weeklyChallengeEntries.id, entryId),
           eq(weeklyChallengeEntries.telegramUserId, userId),
-          eq(weeklyChallengeEntries.competitionId, competitionId),
+          eq(
+            weeklyChallengeEntries.competitionId,
+            competitionId,
+          ),
         ),
       )
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!entry) throw new Error("የቡድን ምዝገባው አልተገኘም።");
+    if (!entry) {
+      throw new Error(
+        "የቡድን ምዝገባው አልተገኘም።",
+      );
+    }
 
     if (entry.submissionStatus === "confirmed") {
       return {
         alreadyConfirmed: true,
         walletTransaction: null,
       };
+    }
+
+    /**
+     * A Chapa payment already pending/success means the same
+     * competition cannot also be paid from Wallet.
+     */
+    const providerPayment = await tx
+      .select()
+      .from(gwPayments)
+      .where(
+        and(
+          eq(gwPayments.competitionId, competitionId),
+          eq(gwPayments.telegramUserId, userId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (
+      providerPayment?.status === "success" ||
+      providerPayment?.status === "pending"
+    ) {
+      throw new Error(
+        "ለዚህ ውድድር የተጀመረ ወይም የተረጋገጠ የChapa ክፍያ አለ። እባክዎ ያንን ክፍያ ይጠብቁ።",
+      );
     }
 
     const reference = `gw-entry:${competitionId}:${userId}`;
@@ -424,7 +560,8 @@ export async function joinWeeklyChallengeWithWallet(
     const updatedWallet = await tx
       .update(walletAccounts)
       .set({
-        balanceEtb: sql`${walletAccounts.balanceEtb} - ${competition.entryFeeEtb}`,
+        balanceEtb:
+          sql`${walletAccounts.balanceEtb} - ${competition.entryFeeEtb}`,
         updatedAt: new Date(),
       })
       .where(
@@ -436,7 +573,9 @@ export async function joinWeeklyChallengeWithWallet(
       .returning();
 
     if (!updatedWallet[0]) {
-      throw new Error("የWallet ቀሪ ሂሳብ በቂ አይደለም።");
+      throw new Error(
+        "የWallet ቀሪ ሂሳብ በቂ አይደለም።",
+      );
     }
 
     const ledger = await tx
@@ -448,16 +587,30 @@ export async function joinWeeklyChallengeWithWallet(
         amountEtb: -competition.entryFeeEtb,
         balanceAfterEtb: updatedWallet[0].balanceEtb,
         reference,
-        description: `GW${competition.gameweek} Weekly Challenge መግቢያ`,
+        description:
+          `GW${competition.gameweek} Weekly Challenge መግቢያ`,
       })
       .returning();
 
-    if (!ledger[0]) throw new Error("የWallet ክፍያ ማስቀመጥ አልተቻለም።");
+    if (!ledger[0]) {
+      throw new Error(
+        "የWallet ክፍያ ማስቀመጥ አልተቻለም።",
+      );
+    }
+
+    /**
+     * Only 70% goes to the prize pool.
+     * 30% remains project revenue.
+     */
+    const prizeContribution = calculatePrizePoolContribution(
+      competition.entryFeeEtb,
+    );
 
     await tx
       .update(gwCompetitions)
       .set({
-        prizePoolEtb: sql`${gwCompetitions.prizePoolEtb} + ${competition.entryFeeEtb}`,
+        prizePoolEtb:
+          sql`${gwCompetitions.prizePoolEtb} + ${prizeContribution}`,
         updatedAt: new Date(),
       })
       .where(eq(gwCompetitions.id, competition.id));
