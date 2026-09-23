@@ -6,6 +6,7 @@ import {
   gwPrizeSettlements,
   weeklyChallengeEntries,
   walletDeposits,
+  walletWithdrawals,
 } from "@workspace/db";
 import { GetMiniAppBootstrapResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
@@ -38,12 +39,17 @@ import {
 } from "../telegram/gw-settlement";
 import {
   approveWalletDeposit,
+  approveWalletWithdrawal,
   createManualTelebirrDeposit,
+  createWalletWithdrawal,
   getWallet,
   getWalletTransactions,
   joinWeeklyChallengeWithWallet,
   listUserDeposits,
+  listUserWithdrawals,
+  markWalletWithdrawalPaid,
   rejectWalletDeposit,
+  rejectWalletWithdrawal,
 } from "../telegram/wallet";
 
 const router: IRouter = Router();
@@ -466,6 +472,142 @@ router.post(
   },
 );
 
+/* -------------------------------------------------------------------------- */
+/* Wallet withdrawals                                                          */
+/* -------------------------------------------------------------------------- */
+
+router.get(
+  "/mini-app/wallet/withdrawals",
+  async (req, res) => {
+    try {
+      const user =
+        await authenticatedUser(req);
+
+      const withdrawals =
+        await listUserWithdrawals(
+          user.id,
+        );
+
+      return res.json({
+        withdrawals:
+          withdrawals.map((item) => ({
+            id: item.id,
+            method: item.method,
+            amountEtb:
+              item.amountEtb,
+            destination:
+              item.destination,
+            status:
+              item.status,
+            payoutReference:
+              item.payoutReference,
+            adminNote:
+              item.adminNote,
+            approvedAt:
+              item.approvedAt
+                ?.toISOString() ??
+              null,
+            rejectedAt:
+              item.rejectedAt
+                ?.toISOString() ??
+              null,
+            paidAt:
+              item.paidAt
+                ?.toISOString() ??
+              null,
+            createdAt:
+              item.createdAt.toISOString(),
+          })),
+      });
+    } catch (error) {
+      const status =
+        error instanceof MiniAppAuthError
+          ? error.status
+          : 503;
+
+      return res.status(status).json({
+        error: errorMessage(error),
+      });
+    }
+  },
+);
+
+router.post(
+  "/mini-app/wallet/withdraw",
+  async (req, res) => {
+    try {
+      const user =
+        await authenticatedUser(req);
+
+      const amountEtb =
+        Number(
+          req.body?.amountEtb,
+        );
+
+      const destination =
+        typeof req.body?.destination ===
+        "string"
+          ? req.body.destination.trim()
+          : "";
+
+      if (
+        !Number.isSafeInteger(
+          amountEtb,
+        ) ||
+        amountEtb <= 0 ||
+        !destination
+      ) {
+        throw new MiniAppRequestError(
+          "የሚወጣውን የገንዘብ መጠን እና የTelebirr ቁጥር ትክክል ያስገቡ።",
+        );
+      }
+
+      const withdrawal =
+        await createWalletWithdrawal(
+          user.id,
+          amountEtb,
+          destination,
+        );
+
+      const wallet =
+        await getWallet(user.id);
+
+      return res.status(201).json({
+        withdrawal: {
+          id:
+            withdrawal.id,
+          method:
+            withdrawal.method,
+          amountEtb:
+            withdrawal.amountEtb,
+          destination:
+            withdrawal.destination,
+          status:
+            withdrawal.status,
+          createdAt:
+            withdrawal.createdAt.toISOString(),
+        },
+        wallet: {
+          balanceEtb:
+            wallet.balanceEtb,
+          currency: "ETB",
+        },
+      });
+    } catch (error) {
+      const status =
+        error instanceof MiniAppAuthError
+          ? error.status
+          : error instanceof MiniAppRequestError
+            ? error.status
+            : 400;
+
+      return res.status(status).json({
+        error: errorMessage(error),
+      });
+    }
+  },
+);
+
 router.post(
   "/mini-app/wallet/entry",
   async (req, res) => {
@@ -695,10 +837,6 @@ router.post(
           payload,
         );
 
-      /*
-       * Reprocess duplicate webhook deliveries safely.
-       * The payment transition itself is idempotent.
-       */
       await confirmPaymentFromProvider(
         txRef,
       );
@@ -812,6 +950,8 @@ function requireAdmin(
     Buffer.from(configured),
   );
 }
+
+/* ------------------------------ Deposits --------------------------------- */
 
 router.get(
   "/admin/wallet/deposits",
@@ -949,6 +1089,241 @@ router.post(
     }
   },
 );
+
+/* ---------------------------- Withdrawals -------------------------------- */
+
+router.get(
+  "/admin/wallet/withdrawals",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const limitRaw =
+        Number(
+          req.query.limit ?? 100,
+        );
+
+      const limit =
+        Number.isSafeInteger(
+          limitRaw,
+        )
+          ? Math.min(
+              Math.max(
+                limitRaw,
+                1,
+              ),
+              200,
+            )
+          : 100;
+
+      const withdrawals =
+        await db
+          .select()
+          .from(walletWithdrawals)
+          .orderBy(
+            desc(
+              walletWithdrawals.createdAt,
+            ),
+          )
+          .limit(limit);
+
+      return res.json({
+        withdrawals,
+      });
+    } catch (error) {
+      logger.error(
+        { error },
+        "Could not load wallet withdrawals",
+      );
+
+      return res.status(500).json({
+        error:
+          "Could not load wallet withdrawals",
+      });
+    }
+  },
+);
+
+router.post(
+  "/admin/wallet/withdrawals/:withdrawalId/approve",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const withdrawalId =
+        Number(
+          req.params.withdrawalId,
+        );
+
+      const adminNote =
+        typeof req.body?.adminNote ===
+        "string"
+          ? req.body.adminNote.trim()
+          : undefined;
+
+      const withdrawal =
+        await approveWalletWithdrawal(
+          withdrawalId,
+          adminNote,
+        );
+
+      return res.json({
+        ok: true,
+        withdrawal,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          withdrawalId:
+            req.params.withdrawalId,
+        },
+        "Could not approve wallet withdrawal",
+      );
+
+      return res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not approve withdrawal",
+      });
+    }
+  },
+);
+
+router.post(
+  "/admin/wallet/withdrawals/:withdrawalId/reject",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const withdrawalId =
+        Number(
+          req.params.withdrawalId,
+        );
+
+      const adminNote =
+        typeof req.body?.adminNote ===
+        "string"
+          ? req.body.adminNote.trim()
+          : undefined;
+
+      const withdrawal =
+        await rejectWalletWithdrawal(
+          withdrawalId,
+          adminNote,
+        );
+
+      return res.json({
+        ok: true,
+        withdrawal,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          withdrawalId:
+            req.params.withdrawalId,
+        },
+        "Could not reject wallet withdrawal",
+      );
+
+      return res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not reject withdrawal",
+      });
+    }
+  },
+);
+
+router.post(
+  "/admin/wallet/withdrawals/:withdrawalId/paid",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const withdrawalId =
+        Number(
+          req.params.withdrawalId,
+        );
+
+      const payoutReference =
+        typeof req.body
+          ?.payoutReference ===
+        "string"
+          ? req.body.payoutReference.trim()
+          : "";
+
+      const adminNote =
+        typeof req.body?.adminNote ===
+        "string"
+          ? req.body.adminNote.trim()
+          : undefined;
+
+      if (
+        !Number.isSafeInteger(
+          withdrawalId,
+        ) ||
+        withdrawalId <= 0 ||
+        !payoutReference ||
+        payoutReference.length > 120
+      ) {
+        return res.status(400).json({
+          error:
+            "Invalid payout data",
+        });
+      }
+
+      const withdrawal =
+        await markWalletWithdrawalPaid(
+          withdrawalId,
+          payoutReference,
+          adminNote,
+        );
+
+      return res.json({
+        ok: true,
+        withdrawal,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error,
+          withdrawalId:
+            req.params.withdrawalId,
+        },
+        "Could not mark wallet withdrawal paid",
+      );
+
+      return res.status(400).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not mark withdrawal paid",
+      });
+    }
+  },
+);
+
+/* ---------------------------- Competition -------------------------------- */
 
 router.post(
   "/admin/gw/:competitionId/finalize",
