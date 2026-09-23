@@ -795,13 +795,67 @@ useEffect(() => {
   };
 }, [data.team.submissionStatus]);
     const payWithWallet = async () => {
-    if (walletBalance === null || walletBalance < 100) {
-      setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
-      return;
-    }
+  if (walletBalance === null || walletBalance < 100) {
+    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
+    return;
+  }
 
-    
-      
+  setWalletPaymentLoading(true);
+  setPaymentError(null);
+
+  try {
+    const result = await customFetch<
+      MiniAppBootstrap & {
+        wallet: {
+          balanceEtb: number;
+          currency: string;
+        };
+        payment: {
+          method: 'wallet';
+          status: 'success';
+          amountEtb: number;
+          alreadyConfirmed: boolean;
+        };
+      }
+    >('/api/mini-app/wallet/entry', {
+      method: 'POST',
+      responseType: 'json',
+    });
+
+    setWalletBalance(result.wallet.balanceEtb);
+    update(result);
+  } catch (error) {
+    setPaymentError(
+      extractApiErrorMessage(error) ??
+        'በWallet መክፈል አልተሳካም።',
+    );
+  } finally {
+    setWalletPaymentLoading(false);
+  }
+};
+
+const startPayment = async () => {
+  setPaymentLoading(true);
+  setPaymentError(null);
+
+  try {
+    const result = await customFetch<{ checkoutUrl: string }>(
+      '/api/mini-app/payment/initialize',
+      {
+        method: 'POST',
+        responseType: 'json',
+      },
+    );
+
+    window.location.href = result.checkoutUrl;
+  } catch {
+    setPaymentError(
+      'የክፍያ ገጹን መክፈት አልተቻለም። እንደገና ይሞክሩ።',
+    );
+  } finally {
+    setPaymentLoading(false);
+  }
+};
   return (
     <div className="page-stack">
       <SectionTitle eyebrow="የሳምንቱ ውድድር" title={`ሳምንት ${data.gameweek.id} ቡድን`} note={data.gameweek.locked ? 'ይህ ሳምንት ተዘግቷል።' : 'በቀላሉ ይምረጡና ይወዳደሩ።'} action={<Pill tone={locked ? 'gold' : 'mint'}>{locked ? <><LockKeyhole className="h-3 w-3" /> ተዘግቷል</> : 'ክፍት ነው'}</Pill>} />
@@ -1007,8 +1061,7 @@ function WalletPage() {
     void loadWallet();
   }, [loadWallet]);
 
-  const submitDeposit = async (event:FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitDeposit = async (event:FormEvent<HTMLFormElement>)
 
     const parsedAmount = Number(amount);
 
