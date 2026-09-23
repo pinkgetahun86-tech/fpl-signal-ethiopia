@@ -1,3 +1,4 @@
+Fix wallet API imports
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request } from "express";
 import {
@@ -6,6 +7,7 @@ import {
   weeklyChallengeEntries,
   walletDeposits,
 } from "@workspace/db";
+import { and, desc, eq } from "drizzle-orm";
 import { db, gwPrizeSettlements, weeklyChallengeEntries } from "@workspace/db";
 import { GetMiniAppBootstrapResponse } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
