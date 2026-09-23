@@ -4,7 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  Check,/ 
+  Check,
   ChevronRight,
   CircleAlert,
   Clock3,
