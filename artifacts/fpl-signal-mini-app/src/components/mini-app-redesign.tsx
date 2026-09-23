@@ -1121,8 +1121,7 @@ function WalletPage() {
     void loadWallet();
   }, [loadWallet]);
 
-  const submitDeposit = async (event:FormEvent<HTMLFormElement>)
-
+  const submitDeposit = async (event: FormEvent<HTMLFormElement>) => {
     const parsedAmount = Number(amount);
 
     if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
