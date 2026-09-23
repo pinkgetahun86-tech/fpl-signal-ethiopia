@@ -44,7 +44,26 @@ import { prepareTelegramApp } from '@/lib/telegram';
 
 type BuilderPhase = 'squad' | 'xi' | 'captains' | 'confirm';
 type Position = MiniAppPlayer['position'];
+type WalletTransaction = {
+  id: number;
+  type: string;
+  amountEtb: number;
+  balanceAfterEtb: number;
+  reference: string;
+  description: string;
+  createdAt: string;
+};
 
+type WalletDeposit = {
+  id: number;
+  method: string;
+  amountEtb: number;
+  transactionReference: string;
+  status: string;
+  adminNote: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+};
 const positionOrder: Position[] = ['goalkeeper', 'defender', 'midfielder', 'forward'];
 
 const positionLabels: Record<string, string> = {
@@ -270,11 +289,12 @@ function AppShell({ children, data }: { children: ReactNode; data: MiniAppBootst
   }, [location, setLocation]);
 
   const navItems = [
-    { href: '/', label: 'መነሻ', icon: Home, active: location === '/' },
-    { href: '/team', label: 'ቡድኔ', icon: Users, active: location === '/team' || location === '/challenge' },
-    { href: '/leaderboard', label: 'ደረጃ', icon: Trophy, active: location === '/leaderboard' },
-    { href: '/about', label: 'ተጨማሪ', icon: MoreHorizontal, active: ['/about', '/points', '/signal'].includes(location) },
-  ];
+  { href: '/', label: 'መነሻ', icon: Home, active: location === '/' },
+  { href: '/team', label: 'ቡድኔ', icon: Users, active: location === '/team' || location === '/challenge' },
+  { href: '/leaderboard', label: 'ደረጃ', icon: Trophy, active: location === '/leaderboard' },
+  { href: '/wallet', label: 'Wallet', icon: WalletCards, active: location === '/wallet' },
+  { href: '/about', label: 'ተጨማሪ', icon: MoreHorizontal, active: ['/about', '/points', '/signal'].includes(location) },
+];
 
   return (
     <div className="app-shell">
@@ -885,7 +905,308 @@ export function MiniApp() {
           ? <PointsPage data={data} />
           : location === '/signal'
             ? <SignalPage data={data} />
-            : location === '/about'
+            : location === '/about'function WalletPage() {
+  const [balance, setBalance] = useState(0);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [deposits, setDeposits] = useState<WalletDeposit[]>([]);
+  const [amount, setAmount] = useState('');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const loadWallet = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [wallet, transactionData, depositData] = await Promise.all([
+        customFetch<{ balanceEtb: number; currency: string }>(
+          '/api/mini-app/wallet',
+          { method: 'GET', responseType: 'json' },
+        ),
+        customFetch<{ transactions: WalletTransaction[] }>(
+          '/api/mini-app/wallet/transactions',
+          { method: 'GET', responseType: 'json' },
+        ),
+        customFetch<{ deposits: WalletDeposit[] }>(
+          '/api/mini-app/wallet/deposits',
+          { method: 'GET', responseType: 'json' },
+        ),
+      ]);
+
+      setBalance(wallet.balanceEtb);
+      setTransactions(transactionData.transactions);
+      setDeposits(depositData.deposits);
+    } catch (err) {
+      setError(
+        extractApiErrorMessage(err) ??
+          'የWallet መረጃን ማግኘት አልተቻለም።',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWallet();
+  }, [loadWallet]);
+
+  const submitDeposit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const numericAmount = Number(amount);
+
+    if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) {
+      setError('ትክክለኛ የገንዘብ መጠን ያስገቡ።');
+      return;
+    }
+
+    if (!transactionReference.trim()) {
+      setError('የTelebirr Transaction Reference ያስገቡ።');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await customFetch(
+        '/api/mini-app/wallet/deposit/telebirr',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amountEtb: numericAmount,
+            transactionReference: transactionReference.trim(),
+          }),
+          responseType: 'json',
+        },
+      );
+
+      setAmount('');
+      setTransactionReference('');
+      setSuccess(
+        'የገንዘብ ማስገባት ጥያቄዎ ተልኳል። ከAdmin ማረጋገጫ በኋላ Walletዎ ይጨምራል።',
+      );
+
+      await loadWallet();
+    } catch (err) {
+      setError(
+        extractApiErrorMessage(err) ??
+          'የገንዘብ ማስገባት አልተሳካም።',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const depositStatus = (status: string) => {
+    if (status === 'approved') return 'ተፈቅዷል';
+    if (status === 'rejected') return 'ተሰርዟል';
+    if (status === 'pending') return 'በመጠባበቅ ላይ';
+    return status;
+  };
+
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  return (
+    <div className="page-stack">
+      <SectionTitle
+        eyebrow="WALLET"
+        title="የእኔ Wallet"
+        note="ገንዘብ ያስገቡ፣ የWeekly Challenge መግቢያዎን በWallet ይክፈሉ።"
+        action={
+          <button
+            type="button"
+            className="icon-button icon-button-filled"
+            onClick={() => void loadWallet()}
+            aria-label="Wallet አድስ"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        }
+      />
+
+      <section className="challenge-hero">
+        <div className="hero-content">
+          <span className="hero-kicker">
+            <WalletCards className="h-3.5 w-3.5" />
+            የWallet ሂሳብ
+          </span>
+          <h2>{balance.toLocaleString()} ETB</h2>
+          <p className="hero-description">
+            ያለዎት የWallet ቀሪ ሂሳብ
+          </p>
+        </div>
+      </section>
+
+      {error && (
+        <div className="notice notice-gold">
+          <CircleAlert className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="notice">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Telebirr</p>
+            <h2>ገንዘብ ያስገቡ</h2>
+          </div>
+          <WalletCards className="heading-icon" />
+        </div>
+
+        <form onSubmit={submitDeposit} className="step-list">
+          <label className="step-row">
+            <span className="step-number">1</span>
+            <span>
+              <strong>የሚያስገቡት መጠን</strong>
+              <input
+                className="search-box"
+                type="number"
+                min="1"
+                step="1"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="ለምሳሌ 100"
+                inputMode="numeric"
+              />
+            </span>
+          </label>
+
+          <label className="step-row">
+            <span className="step-number">2</span>
+            <span>
+              <strong>Telebirr Transaction Reference</strong>
+              <input
+                className="search-box"
+                type="text"
+                value={transactionReference}
+                onChange={(event) =>
+                  setTransactionReference(event.target.value)
+                }
+                placeholder="Transaction Reference ያስገቡ"
+                autoComplete="off"
+              />
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            className="button button-primary button-large"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <WalletCards className="h-4 w-4" />
+            )}
+            {submitting ? 'በመላክ ላይ…' : 'Deposit አስገባ'}
+          </button>
+        </form>
+
+        <div className="notice">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            መጀመሪያ ገንዘቡን ወደ የፕሮጀክቱ Telebirr ይላኩ።
+            ከዚያ Transaction Reference እዚህ ያስገቡ።
+            Admin ካረጋገጠ በኋላ ገንዘቡ Wallet ላይ ይጨመራል።
+          </span>
+        </div>
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Deposit</p>
+            <h2>የገንዘብ ማስገቢያ ታሪክ</h2>
+          </div>
+          <Clock3 className="heading-icon" />
+        </div>
+
+        {deposits.length ? (
+          <div className="player-list compact-list">
+            {deposits.map((deposit) => (
+              <div className="step-row" key={deposit.id}>
+                <div className="player-main">
+                  <strong>{deposit.amountEtb} ETB</strong>
+                  <span>
+                    {deposit.transactionReference}
+                  </span>
+                  <small>{formatDate(deposit.createdAt)}</small>
+                </div>
+                <Pill
+                  tone={
+                    deposit.status === 'approved'
+                      ? 'mint'
+                      : deposit.status === 'rejected'
+                        ? 'danger'
+                        : 'gold'
+                  }
+                >
+                  {depositStatus(deposit.status)}
+                </Pill>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">
+            እስካሁን Deposit አልገባም።
+          </div>
+        )}
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Transactions</p>
+            <h2>የWallet እንቅስቃሴ</h2>
+          </div>
+          <Activity className="heading-icon" />
+        </div>
+
+        {transactions.length ? (
+          <div className="player-list compact-list">
+            {transactions.map((transaction) => (
+              <div className="step-row" key={transaction.id}>
+                <div className="player-main">
+                  <strong>
+                    {transaction.amountEtb > 0 ? '+' : ''}
+                    {transaction.amountEtb} ETB
+                  </strong>
+                  <span>{transaction.description}</span>
+                  <small>{formatDate(transaction.createdAt)}</small>
+                </div>
+                <span>
+                  {transaction.balanceAfterEtb} ETB
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">
+            እስካሁን Wallet transaction የለም።
+          </div>
+        )}
+      </section>
+    </div>
+  );: location === '/wallet'
+  ? <WalletPage />
+}
               ? <AboutPage />
               : <HomePage data={data} />;
 
