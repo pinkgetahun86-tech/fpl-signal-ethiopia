@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import {
   Activity,
   ArrowLeft,
@@ -787,12 +794,68 @@ useEffect(() => {
     active = false;
   };
 }, [data.team.submissionStatus]);
-  const startPayment = async () => {
     const payWithWallet = async () => {
-  if (walletBalance === null || walletBalance < 100) {
-    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
-    return;
-  }
+    if (walletBalance === null || walletBalance < 100) {
+      setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
+      return;
+    }
+
+    setWalletPaymentLoading(true);
+    setPaymentError(null);
+
+    try {
+      const result = await customFetch<
+        MiniAppBootstrap & {
+          wallet: {
+            balanceEtb: number;
+            currency: string;
+          };
+          payment: {
+            method: 'wallet';
+            status: 'success';
+            amountEtb: number;
+            alreadyConfirmed: boolean;
+          };
+        }
+      >('/api/mini-app/wallet/entry', {
+        method: 'POST',
+        responseType: 'json',
+      });
+
+      setWalletBalance(result.wallet.balanceEtb);
+      update(result);
+    } catch (error) {
+      setPaymentError(
+        extractApiErrorMessage(error) ??
+          'በWallet መክፈል አልተሳካም።',
+      );
+    } finally {
+      setWalletPaymentLoading(false);
+    }
+  };
+
+  const startPayment = async () => {
+    setPaymentLoading(true);
+    setPaymentError(null);
+
+    try {
+      const result = await customFetch<{ checkoutUrl: string }>(
+        '/api/mini-app/payment/initialize',
+        {
+          method: 'POST',
+          responseType: 'json',
+        },
+      );
+
+      window.location.href = result.checkoutUrl;
+    } catch {
+      setPaymentError(
+        'የክፍያ ገጹን መክፈት አልተቻለም። እንደገና ይሞክሩ።',
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
 
   setWalletPaymentLoading(true);
   setPaymentError(null);
@@ -1270,17 +1333,86 @@ function WalletPage() {
 }
 export function MiniApp() {
   const queryClient = useQueryClient();
-  const bootstrap = useGetMiniAppBootstrap({ query: { queryKey: getGetMiniAppBootstrapQueryKey(), retry: 1 } });
-  const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 60_000, retry: 0 } });
+  const bootstrap = useGetMiniAppBootstrap({
+    query: {
+      queryKey: getGetMiniAppBootstrapQueryKey(),
+      retry: 1,
+    },
+  });
+
+  const health = useHealthCheck({
+    query: {
+      queryKey: getHealthCheckQueryKey(),
+      staleTime: 60_000,
+      retry: 0,
+    },
+  });
+
   const [location] = useLocation();
 
   useEffect(() => prepareTelegramApp(), []);
 
-  if (bootstrap.isLoading) return <LoadingState />;
+  const update = useCallback((next: MiniAppBootstrap) => {
+    queryClient.setQueryData(
+      getGetMiniAppBootstrapQueryKey(),
+      next,
+    );
+  }, [queryClient]);
+
+  if (bootstrap.isLoading) {
+    return <LoadingState />;
+  }
+
   if (bootstrap.isError || !bootstrap.data) {
     const error = bootstrap.error as { status?: number } | null;
-    return <ErrorState unauthenticated={error?.status === 401 || error?.status === 403} onRetry={() => void bootstrap.refetch()} />;
+
+    return (
+      <ErrorState
+        unauthenticated={
+          error?.status === 401 || error?.status === 403
+        }
+        onRetry={() => void bootstrap.refetch()}
+      />
+    );
   }
+
+  const data = bootstrap.data as MiniAppBootstrap;
+
+  const page =
+    location === '/challenge'
+      ? <ChallengePage data={data} update={update} />
+      : location === '/team'
+        ? <TeamPage data={data} />
+        : location === '/leaderboard'
+          ? <LeaderboardPage data={data} update={update} />
+          : location === '/points'
+            ? <PointsPage data={data} />
+            : location === '/signal'
+              ? <SignalPage data={data} />
+              : location === '/wallet'
+                ? <WalletPage />
+                : location === '/about'
+                  ? <AboutPage />
+                  : <HomePage data={data} />;
+
+  return (
+    <AppShell data={data}>
+      <div
+        className={cn(
+          'connection-strip',
+          health.isError && 'connection-strip-error',
+        )}
+      >
+        <span className="connection-dot" />
+        {health.isError
+          ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር'
+          : 'የመረጃ አገልግሎት ንቁ ነው'}
+      </div>
+
+      {page}
+    </AppShell>
+  );
+}
 
   const data = bootstrap.data as MiniAppBootstrap;
   const update = useCallback((next: MiniAppBootstrap) => {
