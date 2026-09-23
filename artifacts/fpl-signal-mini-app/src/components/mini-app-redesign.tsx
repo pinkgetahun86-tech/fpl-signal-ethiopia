@@ -4,7 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  Check,
+  Check,/ 
   ChevronRight,
   CircleAlert,
   Clock3,
@@ -561,6 +561,49 @@ function ChallengePage({ data, update }: { data: MiniAppBootstrap; update: (next
   const [captainMode, setCaptainMode] = useState<'captain' | 'vice'>('captain');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+const [walletLoading, setWalletLoading] = useState(false);
+const [walletPaymentLoading, setWalletPaymentLoading] = useState(false);
+  useEffect(() => {
+  if (data.team.submissionStatus !== 'awaiting_payment') {
+    setWalletBalance(null);
+    return;
+  }
+
+  let active = true;
+
+  const loadWalletBalance = async () => {
+    setWalletLoading(true);
+
+    try {
+      const result = await customFetch<{ balanceEtb: number }>(
+        '/api/mini-app/wallet',
+        {
+          method: 'GET',
+          responseType: 'json',
+        },
+      );
+
+      if (active) {
+        setWalletBalance(result.balanceEtb);
+      }
+    } catch {
+      if (active) {
+        setWalletBalance(null);
+      }
+    } finally {
+      if (active) {
+        setWalletLoading(false);
+      }
+    }
+  };
+
+  void loadWalletBalance();
+
+  return () => {
+    active = false;
+  };
+}, [data.team.submissionStatus]);
   const saveTeam = useSaveMiniAppTeam();
   const byId = useMemo(() => new Map(data.players.map((player) => [player.id, player])), [data.players]);
   const validPlayerIds = useMemo(() => new Set(data.players.map((player) => player.id)), [data.players]);
@@ -704,8 +747,86 @@ function ChallengePage({ data, update }: { data: MiniAppBootstrap; update: (next
       if (timer) clearTimeout(timer);
     };
   }, [data.team.submissionStatus, update]);
+useEffect(() => {
+  if (data.team.submissionStatus !== 'awaiting_payment') {
+    setWalletBalance(null);
+    return;
+  }
 
+  let active = true;
+
+  const loadWalletBalance = async () => {
+    setWalletLoading(true);
+
+    try {
+      const result = await customFetch<{ balanceEtb: number }>(
+        '/api/mini-app/wallet',
+        {
+          method: 'GET',
+          responseType: 'json',
+        },
+      );
+
+      if (active) {
+        setWalletBalance(result.balanceEtb);
+      }
+    } catch {
+      if (active) {
+        setWalletBalance(null);
+      }
+    } finally {
+      if (active) {
+        setWalletLoading(false);
+      }
+    }
+  };
+
+  void loadWalletBalance();
+
+  return () => {
+    active = false;
+  };
+}, [data.team.submissionStatus]);
   const startPayment = async () => {
+    const payWithWallet = async () => {
+  if (walletBalance === null || walletBalance < 100) {
+    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
+    return;
+  }
+
+  setWalletPaymentLoading(true);
+  setPaymentError(null);
+
+  try {
+    const result = await customFetch<
+      MiniAppBootstrap & {
+        wallet: {
+          balanceEtb: number;
+          currency: string;
+        };
+        payment: {
+          method: 'wallet';
+          status: 'success';
+          amountEtb: number;
+          alreadyConfirmed: boolean;
+        };
+      }
+    >('/api/mini-app/wallet/entry', {
+      method: 'POST',
+      responseType: 'json',
+    });
+
+    setWalletBalance(result.wallet.balanceEtb);
+    update(result);
+  } catch (error) {
+    setPaymentError(
+      extractApiErrorMessage(error) ??
+        'በWallet መክፈል አልተሳካም።',
+    );
+  } finally {
+    setWalletPaymentLoading(false);
+  }
+};
     setPaymentLoading(true);
     setPaymentError(null);
     try {
@@ -875,7 +996,278 @@ function AboutPage() {
     </div>
   );
 }
+function WalletPage() {
+  const [balance, setBalance] = useState<number | null>(null);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [deposits, setDeposits] = useState<WalletDeposit[]>([]);
+  const [amount, setAmount] = useState('');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
+  const loadWallet = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [wallet, transactionData, depositData] = await Promise.all([
+        customFetch<{ balanceEtb: number; currency: string }>(
+          '/api/mini-app/wallet',
+          { method: 'GET', responseType: 'json' },
+        ),
+        customFetch<{ transactions: WalletTransaction[] }>(
+          '/api/mini-app/wallet/transactions',
+          { method: 'GET', responseType: 'json' },
+        ),
+        customFetch<{ deposits: WalletDeposit[] }>(
+          '/api/mini-app/wallet/deposits',
+          { method: 'GET', responseType: 'json' },
+        ),
+      ]);
+
+      setBalance(wallet.balanceEtb);
+      setTransactions(transactionData.transactions);
+      setDeposits(depositData.deposits);
+    } catch (err) {
+      setError(
+        extractApiErrorMessage(err) ??
+          'የWallet መረጃን መጫን አልተቻለም።',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWallet();
+  }, [loadWallet]);
+
+  const submitDeposit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const parsedAmount = Number(amount);
+
+    if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
+      setError('ትክክለኛ የገንዘብ መጠን ያስገቡ።');
+      return;
+    }
+
+    if (!transactionReference.trim()) {
+      setError('የTelebirr የግብይት ቁጥር ያስገቡ።');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await customFetch('/api/mini-app/wallet/deposit/telebirr', {
+        method: 'POST',
+        responseType: 'json',
+        body: JSON.stringify({
+          amountEtb: parsedAmount,
+          transactionReference: transactionReference.trim(),
+        }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      setAmount('');
+      setTransactionReference('');
+      setSuccess(
+        'የገንዘብ ጥያቄዎ ተልኳል። ከተረጋገጠ በኋላ Wallet ዎ ይሞላል።',
+      );
+
+      await loadWallet();
+    } catch (err) {
+      setError(
+        extractApiErrorMessage(err) ??
+          'Deposit ማስገባት አልተሳካም።',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  return (
+    <div className="page-stack">
+      <SectionTitle
+        eyebrow="Wallet"
+        title="የእኔ Wallet"
+        note="ገንዘብዎን ያስተዳድሩ።"
+        action={
+          <button
+            type="button"
+            className="icon-button icon-button-filled"
+            onClick={() => void loadWallet()}
+            disabled={loading}
+            aria-label="Wallet አድስ"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        }
+      />
+
+      {error && (
+        <div className="notice notice-gold">
+          <CircleAlert className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {success && (
+        <div className="notice">
+          <Check className="h-4 w-4 shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">ቀሪ ሂሳብ</p>
+            <h2>{balance ?? 0} ETB</h2>
+          </div>
+          <WalletCards className="heading-icon" />
+        </div>
+
+        <p className="muted-copy">
+          Wallet ዎን በመጠቀም የWeekly Challenge 100 ETB መግቢያ ይክፈሉ።
+        </p>
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Deposit</p>
+            <h2>በTelebirr ገንዘብ ያስገቡ</h2>
+          </div>
+          <Activity className="heading-icon" />
+        </div>
+
+        <form onSubmit={submitDeposit} className="form-stack">
+          <label>
+            <span>መጠን (ETB)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="ለምሳሌ 100"
+              inputMode="numeric"
+            />
+          </label>
+
+          <label>
+            <span>የTelebirr ግብይት ቁጥር</span>
+            <input
+              type="text"
+              value={transactionReference}
+              onChange={(event) =>
+                setTransactionReference(event.target.value)
+              }
+              placeholder="የግብይት ቁጥር ያስገቡ"
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="button button-primary button-large"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <WalletCards className="h-4 w-4" />
+            )}
+            {submitting ? 'በመላክ ላይ…' : 'Deposit አስገባ'}
+          </button>
+        </form>
+
+        <div className="notice">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            ከTelebirr ወደ ፕሮጀክቱ ሂሳብ ከላኩ በኋላ የግብይት ቁጥሩን እዚህ ያስገቡ።
+            አስተዳዳሪ ካረጋገጠው በኋላ ገንዘቡ Wallet ውስጥ ይገባል።
+          </span>
+        </div>
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Deposit History</p>
+            <h2>የገንዘብ ማስገቢያ ታሪክ</h2>
+          </div>
+          <Clock3 className="heading-icon" />
+        </div>
+
+        {deposits.length ? (
+          <div className="player-list compact-list">
+            {deposits.map((deposit) => (
+              <div className="more-link" key={deposit.id}>
+                <WalletCards className="h-5 w-5" />
+                <span>
+                  <strong>{deposit.amountEtb} ETB · Telebirr</strong>
+                  <small>
+                    {deposit.transactionReference} · {deposit.status}
+                  </small>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">
+            እስካሁን Deposit ታሪክ የለም።
+          </div>
+        )}
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">Transactions</p>
+            <h2>የWallet እንቅስቃሴ</h2>
+          </div>
+          <Activity className="heading-icon" />
+        </div>
+
+        {transactions.length ? (
+          <div className="player-list compact-list">
+            {transactions.map((transaction) => (
+              <div className="more-link" key={transaction.id}>
+                <Activity className="h-5 w-5" />
+                <span>
+                  <strong>
+                    {transaction.amountEtb > 0 ? '+' : ''}
+                    {transaction.amountEtb} ETB
+                  </strong>
+                  <small>
+                    {transaction.description} ·{' '}
+                    {transaction.balanceAfterEtb} ETB
+                  </small>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">
+            እስካሁን የWallet እንቅስቃሴ የለም።
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 export function MiniApp() {
   const queryClient = useQueryClient();
   const bootstrap = useGetMiniAppBootstrap({ query: { queryKey: getGetMiniAppBootstrapQueryKey(), retry: 1 } });
