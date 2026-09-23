@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   jsonb,
   pgTable,
@@ -24,8 +25,12 @@ export const telegramUsers = pgTable("telegram_users", {
     .default([]),
   captainPlayerId: integer("captain_player_id"),
   viceCaptainPlayerId: integer("vice_captain_player_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const weeklyChallengeEntries = pgTable(
@@ -56,35 +61,42 @@ export const weeklyChallengeEntries = pgTable(
       .$type<number[]>()
       .notNull()
       .default([]),
-    lastPointsUpdatedAt: timestamp("last_points_updated_at", { withTimezone: true }),
-    registeredAt: timestamp("registered_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    lastPointsUpdatedAt: timestamp("last_points_updated_at", {
+      withTimezone: true,
+    }),
+    registeredAt: timestamp("registered_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    userCompetitionUnique: uniqueIndex("weekly_challenge_user_competition_unique").on(
-      table.telegramUserId,
-      table.competitionId,
-    ),
+    userCompetitionUnique: uniqueIndex(
+      "weekly_challenge_user_competition_unique",
+    ).on(table.telegramUserId, table.competitionId),
   }),
 );
 
 export type TelegramUser = typeof telegramUsers.$inferSelect;
-export type WeeklyChallengeEntry = typeof weeklyChallengeEntries.$inferSelect;
+export type WeeklyChallengeEntry =
+  typeof weeklyChallengeEntries.$inferSelect;
 
-export const gwCompetitions = pgTable(
-  "gw_competitions",
-  {
-    id: text("id").primaryKey(),
-    gameweek: integer("gameweek").notNull(),
-    entryFeeEtb: integer("entry_fee_etb").notNull().default(0),
-    currency: varchar("currency", { length: 3 }).notNull().default("ETB"),
-    status: text("status").notNull().default("open"),
-    deadlineTime: timestamp("deadline_time", { withTimezone: true }),
-    prizePoolEtb: integer("prize_pool_etb").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-);
+export const gwCompetitions = pgTable("gw_competitions", {
+  id: text("id").primaryKey(),
+  gameweek: integer("gameweek").notNull(),
+  entryFeeEtb: integer("entry_fee_etb").notNull().default(0),
+  currency: varchar("currency", { length: 3 }).notNull().default("ETB"),
+  status: text("status").notNull().default("open"),
+  deadlineTime: timestamp("deadline_time", { withTimezone: true }),
+  prizePoolEtb: integer("prize_pool_etb").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const gwPayments = pgTable(
   "gw_payments",
@@ -108,14 +120,17 @@ export const gwPayments = pgTable(
     providerStatus: text("provider_status"),
     checkoutUrl: text("checkout_url"),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    competitionUserUnique: uniqueIndex("gw_payment_competition_user_unique").on(
-      table.competitionId,
-      table.telegramUserId,
-    ),
+    competitionUserUnique: uniqueIndex(
+      "gw_payment_competition_user_unique",
+    ).on(table.competitionId, table.telegramUserId),
     entryUnique: uniqueIndex("gw_payment_entry_unique").on(table.entryId),
   }),
 );
@@ -138,14 +153,17 @@ export const gwPrizeSettlements = pgTable(
     status: text("status").notNull().default("pending"),
     payoutReference: text("payout_reference"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    competitionEntryUnique: uniqueIndex("gw_prize_competition_entry_unique").on(
-      table.competitionId,
-      table.entryId,
-    ),
+    competitionEntryUnique: uniqueIndex(
+      "gw_prize_competition_entry_unique",
+    ).on(table.competitionId, table.entryId),
   }),
 );
 
@@ -155,20 +173,25 @@ export const gwPaymentEvents = pgTable(
     id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
     txRef: text("tx_ref").notNull(),
     eventType: text("event_type").notNull(),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => ({
-    txEventUnique: uniqueIndex("gw_payment_event_tx_type_unique").on(
-      table.txRef,
-      table.eventType,
-    ),
+    txEventUnique: uniqueIndex(
+      "gw_payment_event_tx_type_unique",
+    ).on(table.txRef, table.eventType),
   }),
 );
 
 export type GwCompetition = typeof gwCompetitions.$inferSelect;
 export type GwPayment = typeof gwPayments.$inferSelect;
-export type GwPrizeSettlement = typeof gwPrizeSettlements.$inferSelect;
+export type GwPrizeSettlement =
+  typeof gwPrizeSettlements.$inferSelect;
+
 export const walletAccounts = pgTable(
   "wallet_accounts",
   {
@@ -191,23 +214,26 @@ export const walletAccounts = pgTable(
   }),
 );
 
-export const walletTransactions = pgTable("wallet_transactions", {
-  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
-  walletAccountId: integer("wallet_account_id")
-    .notNull()
-    .references(() => walletAccounts.id),
-  telegramUserId: integer("telegram_user_id")
-    .notNull()
-    .references(() => telegramUsers.id),
-  type: text("type").notNull(),
-  amountEtb: integer("amount_etb").notNull(),
-  balanceAfterEtb: integer("balance_after_etb").notNull(),
-  reference: text("reference").notNull().unique(),
-  description: text("description"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const walletTransactions = pgTable(
+  "wallet_transactions",
+  {
+    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    walletAccountId: integer("wallet_account_id")
+      .notNull()
+      .references(() => walletAccounts.id),
+    telegramUserId: integer("telegram_user_id")
+      .notNull()
+      .references(() => telegramUsers.id),
+    type: text("type").notNull(),
+    amountEtb: integer("amount_etb").notNull(),
+    balanceAfterEtb: integer("balance_after_etb").notNull(),
+    reference: text("reference").notNull().unique(),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
 
 export const walletDeposits = pgTable("wallet_deposits", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
@@ -219,7 +245,9 @@ export const walletDeposits = pgTable("wallet_deposits", {
     .references(() => telegramUsers.id),
   method: text("method").notNull(),
   amountEtb: integer("amount_etb").notNull(),
-  transactionReference: text("transaction_reference").notNull().unique(),
+  transactionReference: text("transaction_reference")
+    .notNull()
+    .unique(),
   status: text("status").notNull().default("pending"),
   adminNote: text("admin_note"),
   approvedAt: timestamp("approved_at", { withTimezone: true }),
@@ -231,6 +259,79 @@ export const walletDeposits = pgTable("wallet_deposits", {
     .defaultNow(),
 });
 
-export type WalletAccount = typeof walletAccounts.$inferSelect;
-export type WalletTransaction = typeof walletTransactions.$inferSelect;
-export type WalletDeposit = typeof walletDeposits.$inferSelect;
+/**
+ * Wallet withdrawals
+ *
+ * Status flow:
+ * pending -> approved -> paid
+ * pending -> rejected
+ *
+ * The wallet amount is reserved/debited when the withdrawal
+ * request is accepted. If the request is rejected, the amount
+ * is refunded exactly once through the wallet ledger.
+ */
+export const walletWithdrawals = pgTable(
+  "wallet_withdrawals",
+  {
+    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+
+    walletAccountId: integer("wallet_account_id")
+      .notNull()
+      .references(() => walletAccounts.id),
+
+    telegramUserId: integer("telegram_user_id")
+      .notNull()
+      .references(() => telegramUsers.id),
+
+    method: text("method").notNull().default("telebirr_manual"),
+
+    amountEtb: integer("amount_etb").notNull(),
+
+    destination: text("destination").notNull(),
+
+    status: text("status").notNull().default("pending"),
+
+    payoutReference: text("payout_reference"),
+
+    adminNote: text("admin_note"),
+
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userCreatedIndex: index(
+      "wallet_withdrawals_user_created_idx",
+    ).on(table.telegramUserId, table.createdAt),
+
+    statusCreatedIndex: index(
+      "wallet_withdrawals_status_created_idx",
+    ).on(table.status, table.createdAt),
+
+    payoutReferenceUnique: uniqueIndex(
+      "wallet_withdrawals_payout_reference_unique",
+    ).on(table.payoutReference),
+  }),
+);
+
+export type WalletAccount =
+  typeof walletAccounts.$inferSelect;
+
+export type WalletTransaction =
+  typeof walletTransactions.$inferSelect;
+
+export type WalletDeposit =
+  typeof walletDeposits.$inferSelect;
+
+export type WalletWithdrawal =
+  typeof walletWithdrawals.$inferSelect;
