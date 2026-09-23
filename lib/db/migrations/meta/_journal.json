@@ -25,3 +25,10 @@
     }
   ]
 }
+{
+  "idx": 3,
+  "version": "7",
+  "when": 1789384349000,
+  "tag": "0003_wallet_ledger",
+  "breakpoints": true
+}
