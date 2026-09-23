@@ -1304,12 +1304,13 @@ export function MiniApp() {
     : <HomePage data={data} />;
 
   }
-  );: location === '/wallet'
-  ? <WalletPage />
+  return (
+    <AppShell data={data}>
+      <div className={cn('connection-strip', health.isError && 'connection-strip-error')}><span className="connection-dot" />{health.isError ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር' : 'የመረጃ አገልግሎት ንቁ ነው'}</div>
+      {page}
+    </AppShell>
+  );
 }
-              ? <AboutPage />
-              : <HomePage data={data} />;
-
   return (
     <AppShell data={data}>
       <div className={cn('connection-strip', health.isError && 'connection-strip-error')}><span className="connection-dot" />{health.isError ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር' : 'የመረጃ አገልግሎት ንቁ ነው'}</div>
