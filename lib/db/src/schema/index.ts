@@ -169,3 +169,68 @@ export const gwPaymentEvents = pgTable(
 export type GwCompetition = typeof gwCompetitions.$inferSelect;
 export type GwPayment = typeof gwPayments.$inferSelect;
 export type GwPrizeSettlement = typeof gwPrizeSettlements.$inferSelect;
+export const walletAccounts = pgTable(
+  "wallet_accounts",
+  {
+    id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+    telegramUserId: integer("telegram_user_id")
+      .notNull()
+      .references(() => telegramUsers.id),
+    balanceEtb: integer("balance_etb").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    userUnique: uniqueIndex("wallet_account_user_unique").on(
+      table.telegramUserId,
+    ),
+  }),
+);
+
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  walletAccountId: integer("wallet_account_id")
+    .notNull()
+    .references(() => walletAccounts.id),
+  telegramUserId: integer("telegram_user_id")
+    .notNull()
+    .references(() => telegramUsers.id),
+  type: text("type").notNull(),
+  amountEtb: integer("amount_etb").notNull(),
+  balanceAfterEtb: integer("balance_after_etb").notNull(),
+  reference: text("reference").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const walletDeposits = pgTable("wallet_deposits", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  walletAccountId: integer("wallet_account_id")
+    .notNull()
+    .references(() => walletAccounts.id),
+  telegramUserId: integer("telegram_user_id")
+    .notNull()
+    .references(() => telegramUsers.id),
+  method: text("method").notNull(),
+  amountEtb: integer("amount_etb").notNull(),
+  transactionReference: text("transaction_reference").notNull().unique(),
+  status: text("status").notNull().default("pending"),
+  adminNote: text("admin_note"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type WalletAccount = typeof walletAccounts.$inferSelect;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type WalletDeposit = typeof walletDeposits.$inferSelect;
