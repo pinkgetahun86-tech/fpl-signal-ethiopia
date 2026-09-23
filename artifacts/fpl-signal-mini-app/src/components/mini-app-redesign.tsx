@@ -1414,31 +1414,4 @@ export function MiniApp() {
   );
 }
 
-  const data = bootstrap.data as MiniAppBootstrap;
-  const update = useCallback((next: MiniAppBootstrap) => {
-    queryClient.setQueryData(getGetMiniAppBootstrapQueryKey(), next);
-  }, [queryClient]);
   
-  const page = location === '/challenge'
-  ? <ChallengePage data={data} update={update} />
-  : location === '/team'
-    ? <TeamPage data={data} />
-    : location === '/leaderboard'
-      ? <LeaderboardPage data={data} update={update} />
-      : location === '/points'
-        ? <PointsPage data={data} />
-        : location === '/signal'
-          ? <SignalPage data={data} />
-          : location === '/wallet'
-  ? <WalletPage />
-  : location === '/about'
-    ? <AboutPage />
-    : <HomePage data={data} />;
-
-  }
-  return (
-    <AppShell data={data}>
-      <div className={cn('connection-strip', health.isError && 'connection-strip-error')}><span className="connection-dot" />{health.isError ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር' : 'የመረጃ አገልግሎት ንቁ ነው'}</div>
-      {page}
-    </AppShell>
-  )
