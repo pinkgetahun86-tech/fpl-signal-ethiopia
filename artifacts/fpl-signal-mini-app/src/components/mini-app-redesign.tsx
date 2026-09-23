@@ -1073,40 +1073,100 @@ function AboutPage() {
     </div>
   );
 }
+
+   type WalletWithdrawal = {
+  id: number;
+  method: string;
+  amountEtb: number;
+  destination: string;
+  status: string;
+  payoutReference: string | null;
+  adminNote: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
 function WalletPage() {
   const [balance, setBalance] = useState<number | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [deposits, setDeposits] = useState<WalletDeposit[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WalletWithdrawal[]>([]);
+
   const [amount, setAmount] = useState('');
   const [transactionReference, setTransactionReference] = useState('');
+
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [withdrawDestination, setWithdrawDestination] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const withdrawalStatusLabel = (value: string) => {
+    if (value === 'pending') return 'በመጠባበቅ ላይ';
+    if (value === 'approved') return 'ተፈቅዷል';
+    if (value === 'rejected') return 'ተቀባይነት አላገኘም';
+    if (value === 'paid') return 'ተከፍሏል';
+    return value;
+  };
+
+  const depositStatusLabel = (value: string) => {
+    if (value === 'pending') return 'በመጠባበቅ ላይ';
+    if (value === 'approved') return 'ተፈቅዷል';
+    if (value === 'rejected') return 'ተቀባይነት አላገኘም';
+    return value;
+  };
 
   const loadWallet = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const [wallet, transactionData, depositData] = await Promise.all([
+      const [
+        wallet,
+        transactionData,
+        depositData,
+        withdrawalData,
+      ] = await Promise.all([
         customFetch<{ balanceEtb: number; currency: string }>(
           '/api/mini-app/wallet',
-          { method: 'GET', responseType: 'json' },
+          {
+            method: 'GET',
+            responseType: 'json',
+          },
         ),
         customFetch<{ transactions: WalletTransaction[] }>(
           '/api/mini-app/wallet/transactions',
-          { method: 'GET', responseType: 'json' },
+          {
+            method: 'GET',
+            responseType: 'json',
+          },
         ),
         customFetch<{ deposits: WalletDeposit[] }>(
           '/api/mini-app/wallet/deposits',
-          { method: 'GET', responseType: 'json' },
+          {
+            method: 'GET',
+            responseType: 'json',
+          },
+        ),
+        customFetch<{ withdrawals: WalletWithdrawal[] }>(
+          '/api/mini-app/wallet/withdrawals',
+          {
+            method: 'GET',
+            responseType: 'json',
+          },
         ),
       ]);
 
       setBalance(wallet.balanceEtb);
       setTransactions(transactionData.transactions);
       setDeposits(depositData.deposits);
+      setWithdrawals(withdrawalData.withdrawals);
     } catch (err) {
       setError(
         extractApiErrorMessage(err) ??
@@ -1121,16 +1181,27 @@ function WalletPage() {
     void loadWallet();
   }, [loadWallet]);
 
-  const submitDeposit = async (event: FormEvent<HTMLFormElement>) => {
+  const submitDeposit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
     const parsedAmount = Number(amount);
 
-    if (!Number.isInteger(parsedAmount) || parsedAmount <= 0) {
-      setError('ትክክለኛ የገንዘብ መጠን ያስገቡ።');
+    if (
+      !Number.isSafeInteger(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
+      setError(
+        'ትክክለኛ የገንዘብ መጠን ያስገቡ።',
+      );
       return;
     }
 
     if (!transactionReference.trim()) {
-      setError('የTelebirr የግብይት ቁጥር ያስገቡ።');
+      setError(
+        'የTelebirr የግብይት ቁጥር ያስገቡ።',
+      );
       return;
     }
 
@@ -1139,20 +1210,25 @@ function WalletPage() {
     setSuccess(null);
 
     try {
-      await customFetch('/api/mini-app/wallet/deposit/telebirr', {
-        method: 'POST',
-        responseType: 'json',
-        body: JSON.stringify({
-          amountEtb: parsedAmount,
-          transactionReference: transactionReference.trim(),
-        }),
-        headers: {
-          'Content-Type': 'application/json',
+      await customFetch(
+        '/api/mini-app/wallet/deposit/telebirr',
+        {
+          method: 'POST',
+          responseType: 'json',
+          body: JSON.stringify({
+            amountEtb: parsedAmount,
+            transactionReference:
+              transactionReference.trim(),
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
-      });
+      );
 
       setAmount('');
       setTransactionReference('');
+
       setSuccess(
         'የገንዘብ ጥያቄዎ ተልኳል። ከተረጋገጠ በኋላ Wallet ዎ ይሞላል።',
       );
@@ -1165,6 +1241,79 @@ function WalletPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const submitWithdrawal = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    const parsedAmount = Number(withdrawAmount);
+
+    if (
+      !Number.isSafeInteger(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
+      setError(
+        'ትክክለኛ የሚወጣ የገንዘብ መጠን ያስገቡ።',
+      );
+      return;
+    }
+
+    if (
+      balance !== null &&
+      parsedAmount > balance
+    ) {
+      setError(
+        'በWallet ውስጥ ያለው ቀሪ ሂሳብ በቂ አይደለም።',
+      );
+      return;
+    }
+
+    if (!withdrawDestination.trim()) {
+      setError(
+        'የሚቀበለውን Telebirr ቁጥር ያስገቡ።',
+      );
+      return;
+    }
+
+    setWithdrawing(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await customFetch(
+        '/api/mini-app/wallet/withdraw',
+        {
+          method: 'POST',
+          responseType: 'json',
+          body: JSON.stringify({
+            amountEtb: parsedAmount,
+            destination:
+              withdrawDestination.trim(),
+          }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      setWithdrawAmount('');
+      setWithdrawDestination('');
+
+      setSuccess(
+        'የWithdrawal ጥያቄዎ ተልኳል። አስተዳዳሪው ካጸደቀ በኋላ ገንዘቡ ወደ Telebirr ይላካል።',
+      );
+
+      await loadWallet();
+    } catch (err) {
+      setError(
+        extractApiErrorMessage(err) ??
+          'Withdrawal ማስገባት አልተሳካም።',
+      );
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -1215,7 +1364,8 @@ function WalletPage() {
         </div>
 
         <p className="muted-copy">
-          Wallet ዎን በመጠቀም የWeekly Challenge 100 ETB መግቢያ ይክፈሉ።
+          Wallet ዎን በመጠቀም የWeekly Challenge
+          100 ETB መግቢያ ይክፈሉ።
         </p>
       </section>
 
@@ -1228,7 +1378,10 @@ function WalletPage() {
           <Activity className="heading-icon" />
         </div>
 
-        <form onSubmit={submitDeposit} className="form-stack">
+        <form
+          onSubmit={submitDeposit}
+          className="form-stack"
+        >
           <label>
             <span>መጠን (ETB)</span>
             <input
@@ -1236,19 +1389,25 @@ function WalletPage() {
               min="1"
               step="1"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) =>
+                setAmount(event.target.value)
+              }
               placeholder="ለምሳሌ 100"
               inputMode="numeric"
             />
           </label>
 
           <label>
-            <span>የTelebirr ግብይት ቁጥር</span>
+            <span>
+              የTelebirr ግብይት ቁጥር
+            </span>
             <input
               type="text"
               value={transactionReference}
               onChange={(event) =>
-                setTransactionReference(event.target.value)
+                setTransactionReference(
+                  event.target.value,
+                )
               }
               placeholder="የግብይት ቁጥር ያስገቡ"
             />
@@ -1264,15 +1423,19 @@ function WalletPage() {
             ) : (
               <WalletCards className="h-4 w-4" />
             )}
-            {submitting ? 'በመላክ ላይ…' : 'Deposit አስገባ'}
+            {submitting
+              ? 'በመላክ ላይ…'
+              : 'Deposit አስገባ'}
           </button>
         </form>
 
         <div className="notice">
           <Info className="h-4 w-4 shrink-0" />
           <span>
-            ከTelebirr ወደ ፕሮጀክቱ ሂሳብ ከላኩ በኋላ የግብይት ቁጥሩን እዚህ ያስገቡ።
-            አስተዳዳሪ ካረጋገጠው በኋላ ገንዘቡ Wallet ውስጥ ይገባል።
+            ከTelebirr ወደ ፕሮጀክቱ ሂሳብ ከላኩ
+            በኋላ የግብይት ቁጥሩን እዚህ ያስገቡ።
+            አስተዳዳሪ ካረጋገጠው በኋላ ገንዘቡ
+            Wallet ውስጥ ይገባል።
           </span>
         </div>
       </section>
@@ -1280,7 +1443,131 @@ function WalletPage() {
       <section className="simple-card">
         <div className="card-heading">
           <div>
-            <p className="eyebrow">Deposit History</p>
+            <p className="eyebrow">Withdrawal</p>
+            <h2>ከWallet ገንዘብ ያውጡ</h2>
+          </div>
+          <ArrowRight className="heading-icon" />
+        </div>
+
+        <form
+          onSubmit={submitWithdrawal}
+          className="form-stack"
+        >
+          <label>
+            <span>የሚወጣ መጠን (ETB)</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={withdrawAmount}
+              onChange={(event) =>
+                setWithdrawAmount(
+                  event.target.value,
+                )
+              }
+              placeholder="ለምሳሌ 100"
+              inputMode="numeric"
+            />
+          </label>
+
+          <label>
+            <span>
+              የሚቀበለው Telebirr ቁጥር
+            </span>
+            <input
+              type="tel"
+              value={withdrawDestination}
+              onChange={(event) =>
+                setWithdrawDestination(
+                  event.target.value,
+                )
+              }
+              placeholder="09xxxxxxxx"
+              inputMode="tel"
+              autoComplete="tel"
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="button button-primary button-large"
+            disabled={withdrawing}
+          >
+            {withdrawing ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRight className="h-4 w-4" />
+            )}
+            {withdrawing
+              ? 'በመላክ ላይ…'
+              : 'Withdrawal ጠይቅ'}
+          </button>
+        </form>
+
+        <div className="notice">
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            Withdrawal ሲጠይቁ የተጠየቀው መጠን
+            ከWallet ውስጥ ወዲያውኑ ይያዛል።
+            ጥያቄው ከተቀበለ በኋላ አስተዳዳሪ
+            ወደ እርስዎ Telebirr ይልካል።
+            ከተከለከለ ገንዘቡ ወደ Wallet ይመለሳል።
+          </span>
+        </div>
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">
+              Withdrawal History
+            </p>
+            <h2>የገንዘብ ማውጫ ታሪክ</h2>
+          </div>
+          <Clock3 className="heading-icon" />
+        </div>
+
+        {withdrawals.length ? (
+          <div className="player-list compact-list">
+            {withdrawals.map((withdrawal) => (
+              <div
+                className="more-link"
+                key={withdrawal.id}
+              >
+                <ArrowRight className="h-5 w-5" />
+                <span>
+                  <strong>
+                    {withdrawal.amountEtb} ETB ·
+                    Telebirr
+                  </strong>
+                  <small>
+                    {withdrawal.destination} ·{' '}
+                    {withdrawalStatusLabel(
+                      withdrawal.status,
+                    )}
+                  </small>
+                  {withdrawal.adminNote && (
+                    <small>
+                      {withdrawal.adminNote}
+                    </small>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-inline">
+            እስካሁን Withdrawal ታሪክ የለም።
+          </div>
+        )}
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">
+              Deposit History
+            </p>
             <h2>የገንዘብ ማስገቢያ ታሪክ</h2>
           </div>
           <Clock3 className="heading-icon" />
@@ -1289,13 +1576,26 @@ function WalletPage() {
         {deposits.length ? (
           <div className="player-list compact-list">
             {deposits.map((deposit) => (
-              <div className="more-link" key={deposit.id}>
+              <div
+                className="more-link"
+                key={deposit.id}
+              >
                 <WalletCards className="h-5 w-5" />
                 <span>
-                  <strong>{deposit.amountEtb} ETB · Telebirr</strong>
+                  <strong>
+                    {deposit.amountEtb} ETB · Telebirr
+                  </strong>
                   <small>
-                    {deposit.transactionReference} · {deposit.status}
+                    {deposit.transactionReference} ·{' '}
+                    {depositStatusLabel(
+                      deposit.status,
+                    )}
                   </small>
+                  {deposit.adminNote && (
+                    <small>
+                      {deposit.adminNote}
+                    </small>
+                  )}
                 </span>
               </div>
             ))}
@@ -1319,11 +1619,16 @@ function WalletPage() {
         {transactions.length ? (
           <div className="player-list compact-list">
             {transactions.map((transaction) => (
-              <div className="more-link" key={transaction.id}>
+              <div
+                className="more-link"
+                key={transaction.id}
+              >
                 <Activity className="h-5 w-5" />
                 <span>
                   <strong>
-                    {transaction.amountEtb > 0 ? '+' : ''}
+                    {transaction.amountEtb > 0
+                      ? '+'
+                      : ''}
                     {transaction.amountEtb} ETB
                   </strong>
                   <small>
@@ -1342,7 +1647,8 @@ function WalletPage() {
       </section>
     </div>
   );
-}
+} 
+    
 export function MiniApp() {
   const queryClient = useQueryClient();
   const bootstrap = useGetMiniAppBootstrap({
