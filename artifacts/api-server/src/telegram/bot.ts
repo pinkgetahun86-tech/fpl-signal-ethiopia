@@ -310,10 +310,28 @@ async function refreshChallengeScoresInternal(challenge: WeeklyChallenge): Promi
     .where(eq(weeklyChallengeEntries.competitionId, challenge.competitionId));
   if (entries.length === 0) return 0;
 
-  const [players, liveStats] = await Promise.all([
-    getFplPlayers(),
-    getLiveGameweekStats(challenge.gameweek),
-  ]);
+  const players = await getFplPlayers();
+
+let liveStats;
+try {
+  liveStats = await getLiveGameweekStats(challenge.gameweek);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (
+    message.includes(
+      `FPL live gameweek ${challenge.gameweek} contained no player statistics`,
+    )
+  ) {
+    logger.info(
+      { gameweek: challenge.gameweek },
+      "Weekly Challenge score refresh skipped because the gameweek has not started",
+    );
+    return 0;
+  }
+
+  throw error;
+}
   let updatedCount = 0;
   for (const entry of entries) {
     const benchPlayerIds =
