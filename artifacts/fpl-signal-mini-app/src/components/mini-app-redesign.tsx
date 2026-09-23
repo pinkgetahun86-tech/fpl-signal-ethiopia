@@ -916,12 +916,72 @@ const startPayment = async () => {
           <TeamPitch players={selectedPlayers} starters={starters} captain={captain} vice={vice} />
 
           {data.team.submissionStatus === 'awaiting_payment' && (
-            <div className="payment-card">
-              <div className="payment-icon"><WalletCards className="h-5 w-5" /></div>
-              <div className="payment-copy"><strong>ክፍያዎን ያጠናቅቁ</strong><p>ክፍያው እስኪረጋገጥ ድረስ ቡድንዎ በደረጃ ሰንጠረዥ አይገባም።</p></div>
-              <button type="button" className="button button-gold" onClick={() => void startPayment()} disabled={paymentLoading}>{paymentLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} ክፍያ ጀምር</button>
-            </div>
-          )}
+  <div className="payment-card">
+    <div className="payment-icon">
+      <WalletCards className="h-5 w-5" />
+    </div>
+
+    <div className="payment-copy">
+      <strong>የውድድሩን ክፍያ ያጠናቁ</strong>
+      <p>የWeekly Challenge መግቢያ 100 ETB ነው።</p>
+
+      <div className="step-list">
+        <div className="step-row">
+          <WalletCards className="h-4 w-4" />
+          <span>
+            Wallet ቀሪ ሂሳብ:{' '}
+            {walletLoading
+              ? 'በመጫን ላይ…'
+              : `${walletBalance ?? 0} ETB`}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div className="payment-actions">
+      <button
+        type="button"
+        className="button button-primary"
+        onClick={() => void payWithWallet()}
+        disabled={
+          walletLoading ||
+          walletPaymentLoading ||
+          walletBalance === null ||
+          walletBalance < 100
+        }
+      >
+        {walletPaymentLoading ? (
+          <RefreshCw className="h-4 w-4 animate-spin" />
+        ) : (
+          <WalletCards className="h-4 w-4" />
+        )}
+        {walletPaymentLoading
+          ? 'በመክፈል ላይ…'
+          : 'በWallet 100 ETB ክፈል'}
+      </button>
+
+      <button
+        type="button"
+        className="button button-gold"
+        onClick={() => void startPayment()}
+        disabled={paymentLoading || walletPaymentLoading}
+      >
+        {paymentLoading ? (
+          <RefreshCw className="h-4 w-4 animate-spin" />
+        ) : (
+          <ArrowRight className="h-4 w-4" />
+        )}
+        {paymentLoading ? 'በመክፈል ላይ…' : 'በChapa ክፈል'}
+      </button>
+    </div>
+
+    {walletBalance !== null && walletBalance < 100 && (
+      <p className="form-error">
+        በWallet ውስጥ በቂ ገንዘብ የለም። Wallet ይሙሉ።
+      </p>
+    )}
+  </div>
+)}
           {paymentError && <p className="form-error">{paymentError}</p>}
           <div className="builder-footer"><button type="button" className="button button-ghost" onClick={() => setPhase('captains')}><ArrowLeft className="h-4 w-4" /> ተመለስ</button><button type="button" className="button button-primary button-large" disabled={!canConfirm || locked || saveTeam.isPending} onClick={submit} data-testid="button-confirm-team">{saveTeam.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} {saveTeam.isPending ? 'በመላክ ላይ…' : data.team.registered ? 'ለውጡን አስቀምጥ' : 'ቡድኔን አረጋግጥ'}</button></div>
           {saveTeam.isError && <p className="form-error">{extractApiErrorMessage(saveTeam.error) ?? 'ቡድኑን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።'}</p>}
