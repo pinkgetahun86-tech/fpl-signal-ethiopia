@@ -1309,11 +1309,4 @@ export function MiniApp() {
       <div className={cn('connection-strip', health.isError && 'connection-strip-error')}><span className="connection-dot" />{health.isError ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር' : 'የመረጃ አገልግሎት ንቁ ነው'}</div>
       {page}
     </AppShell>
-  );
-}
-   (
-    <AppShell data={data}>
-      <div className={cn('connection-strip', health.isError && 'connection-strip-error')}><span className="connection-dot" />{health.isError ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር' : 'የመረጃ አገልግሎት ንቁ ነው'}</div>
-      {page}
-    </AppShell>
-
+  )
