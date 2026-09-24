@@ -31,7 +31,7 @@ function assertPositiveEtb(amountEtb: number): number {
 function cleanReference(reference: string): string {
   const value = reference.trim();
 
-  if (!value || value.length > 120) {
+  if (!value || value.length > 2000) {
     throw new Error("የTransaction reference ትክክል አይደለም።");
   }
 
