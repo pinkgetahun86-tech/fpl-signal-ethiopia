@@ -1,0 +1,515 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  Check,
+  Clock3,
+  LogOut,
+  RefreshCw,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+import { customFetch } from "@workspace/api-client-react";
+
+type WithdrawalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "paid"
+  | string;
+
+type Withdrawal = {
+  id: number;
+  walletAccountId: number;
+  telegramUserId: number;
+  method: string;
+  amountEtb: number;
+  destination: string;
+  status: WithdrawalStatus;
+  payoutReference: string | null;
+  adminNote: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const TOKEN_KEY = "fpl_signal_admin_token";
+
+function formatDate(value: string | null) {
+  if (!value) return "-";
+
+  return new Intl.DateTimeFormat("am-ET", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function statusLabel(status: WithdrawalStatus) {
+  switch (status) {
+    case "pending":
+      return "በመጠባበቅ ላይ";
+    case "approved":
+      return "ተፈቅዷል";
+    case "rejected":
+      return "ተቀባይነት አላገኘም";
+    case "paid":
+      return "ተከፍሏል";
+    default:
+      return status;
+  }
+}
+
+function statusClass(status: WithdrawalStatus) {
+  switch (status) {
+    case "pending":
+      return "bg-amber-100 text-amber-800";
+    case "approved":
+      return "bg-blue-100 text-blue-800";
+    case "rejected":
+      return "bg-red-100 text-red-800";
+    case "paid":
+      return "bg-emerald-100 text-emerald-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
+export default function AdminPage() {
+  const [token, setToken] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const loadWithdrawals = useCallback(async () => {
+    if (!token) return;
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await customFetch<{
+        withdrawals: Withdrawal[];
+      }>("/api/admin/wallet/withdrawals?limit=200", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: "json",
+      });
+
+      setWithdrawals(response.withdrawals ?? []);
+    } catch (err) {
+      const text =
+        err instanceof Error
+          ? err.message
+          : "የWithdrawal መረጃን ማምጣት አልተቻለም።";
+
+      setError(text);
+
+      if (
+        text.includes("401") ||
+        text.toLowerCase().includes("unauthorized")
+      ) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        setToken("");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(TOKEN_KEY);
+
+    if (saved) {
+      setToken(saved);
+      setTokenInput(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      void loadWithdrawals();
+    }
+  }, [token, loadWithdrawals]);
+
+  function login(event: React.FormEvent) {
+    event.preventDefault();
+
+    const value = tokenInput.trim();
+
+    if (!value) {
+      setError("Admin Token ያስገቡ።");
+      return;
+    }
+
+    sessionStorage.setItem(TOKEN_KEY, value);
+    setError("");
+    setMessage("");
+    setToken(value);
+  }
+
+  function logout() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    setToken("");
+    setTokenInput("");
+    setWithdrawals([]);
+    setError("");
+    setMessage("");
+  }
+
+  async function performAction(
+    withdrawal: Withdrawal,
+    action: "approve" | "reject" | "paid",
+  ) {
+    setBusyId(withdrawal.id);
+    setError("");
+    setMessage("");
+
+    try {
+      let body: Record<string, string> = {};
+
+      if (action === "paid") {
+        const payoutReference = window.prompt(
+          "የTelebirr ክፍያ Transaction Reference ያስገቡ።",
+          "",
+        );
+
+        if (!payoutReference?.trim()) {
+          setBusyId(null);
+          return;
+        }
+
+        body = {
+          payoutReference: payoutReference.trim(),
+        };
+      } else {
+        const adminNote = window.prompt(
+          action === "approve"
+            ? "Admin note (አማራጭ):"
+            : "የመከልከያ ምክንያት:",
+          "",
+        );
+
+        if (adminNote?.trim()) {
+          body.adminNote = adminNote.trim();
+        }
+      }
+
+      await customFetch(
+        `/api/admin/wallet/withdrawals/${withdrawal.id}/${action}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+          responseType: "json",
+        },
+      );
+
+      setMessage(
+        action === "approve"
+          ? "Withdrawal ተፈቅዷል።"
+          : action === "reject"
+            ? "Withdrawal ተመልሷል።"
+            : "ክፍያው Paid ተብሎ ተመዝግቧል።",
+      );
+
+      await loadWithdrawals();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "የAdmin action ማከናወን አልተቻለም።",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (!token) {
+    return (
+      <main className="min-h-screen bg-slate-950 px-4 py-8 text-white">
+        <div className="mx-auto max-w-md">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+            <div className="mb-6 flex items-center gap-3">
+              <div className="rounded-xl bg-emerald-500/15 p-3">
+                <ShieldCheck className="h-6 w-6 text-emerald-400" />
+              </div>
+
+              <div>
+                <h1 className="text-xl font-bold">
+                  FPL Signal Admin
+                </h1>
+                <p className="text-sm text-slate-400">
+                  Wallet Withdrawal Dashboard
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={login} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm text-slate-300">
+                  Admin Token
+                </label>
+
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(event) =>
+                    setTokenInput(event.target.value)
+                  }
+                  placeholder="GW_ADMIN_API_TOKEN"
+                  autoComplete="off"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              {error && (
+                <div className="rounded-xl bg-red-500/10 p-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500"
+              >
+                ወደ Admin ግባ
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 px-3 py-5 text-white sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-5 flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-7 w-7 text-emerald-400" />
+              <h1 className="text-2xl font-bold">
+                FPL Signal Admin
+              </h1>
+            </div>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Wallet Withdrawals
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void loadWithdrawals()}
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium hover:bg-slate-700 disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${
+                  loading ? "animate-spin" : ""
+                }`}
+              />
+              Refresh
+            </button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-900/50 bg-red-950/30 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-950/60"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {message && (
+          <div className="mb-4 rounded-xl border border-emerald-800/50 bg-emerald-950/40 p-4 text-sm text-emerald-300">
+            {message}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-800/50 bg-red-950/40 p-4 text-sm text-red-300">
+            {error}
+          </div>
+        )}
+
+        <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ["Pending", withdrawals.filter((x) => x.status === "pending").length],
+            ["Approved", withdrawals.filter((x) => x.status === "approved").length],
+            ["Paid", withdrawals.filter((x) => x.status === "paid").length],
+            ["Rejected", withdrawals.filter((x) => x.status === "rejected").length],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-2xl border border-slate-800 bg-slate-900 p-4"
+            >
+              <p className="text-xs text-slate-500">{label}</p>
+              <p className="mt-1 text-2xl font-bold">{value}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="flex items-center justify-between border-b border-slate-800 p-4">
+            <div>
+              <h2 className="font-bold">Withdrawal Requests</h2>
+              <p className="text-xs text-slate-500">
+                {withdrawals.length} requests
+              </p>
+            </div>
+
+            <Clock3 className="h-5 w-5 text-slate-500" />
+          </div>
+
+          {loading && withdrawals.length === 0 ? (
+            <div className="p-10 text-center text-slate-400">
+              መረጃ በመጫን ላይ...
+            </div>
+          ) : withdrawals.length === 0 ? (
+            <div className="p-10 text-center text-slate-400">
+              Withdrawal request የለም።
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800">
+              {withdrawals.map((withdrawal) => (
+                <article
+                  key={withdrawal.id}
+                  className="p-4 sm:p-5"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className="font-bold">
+                          #{withdrawal.id}
+                        </span>
+
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                            withdrawal.status,
+                          )}`}
+                        >
+                          {statusLabel(withdrawal.status)}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-1 text-sm text-slate-300 sm:grid-cols-2">
+                        <div>
+                          User ID:{" "}
+                          <span className="font-semibold text-white">
+                            {withdrawal.telegramUserId}
+                          </span>
+                        </div>
+
+                        <div>
+                          Amount:{" "}
+                          <span className="font-bold text-emerald-400">
+                            {withdrawal.amountEtb.toLocaleString()} ETB
+                          </span>
+                        </div>
+
+                        <div>
+                          Telebirr:{" "}
+                          <span className="font-mono text-white">
+                            {withdrawal.destination}
+                          </span>
+                        </div>
+
+                        <div>
+                          Date:{" "}
+                          <span className="text-slate-400">
+                            {formatDate(withdrawal.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {withdrawal.payoutReference && (
+                        <p className="mt-2 text-xs text-slate-400">
+                          Payout Ref:{" "}
+                          <span className="font-mono text-slate-200">
+                            {withdrawal.payoutReference}
+                          </span>
+                        </p>
+                      )}
+
+                      {withdrawal.adminNote && (
+                        <p className="mt-2 text-xs text-slate-400">
+                          Note: {withdrawal.adminNote}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {withdrawal.status === "pending" && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={busyId === withdrawal.id}
+                            onClick={() =>
+                              void performAction(
+                                withdrawal,
+                                "approve",
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            <Check className="h-4 w-4" />
+                            Approve
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={busyId === withdrawal.id}
+                            onClick={() =>
+                              void performAction(
+                                withdrawal,
+                                "reject",
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold hover:bg-red-500 disabled:opacity-50"
+                          >
+                            <X className="h-4 w-4" />
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {withdrawal.status === "approved" && (
+                        <button
+                          type="button"
+                          disabled={busyId === withdrawal.id}
+                          onClick={() =>
+                            void performAction(
+                              withdrawal,
+                              "paid",
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                        >
+                          <Check className="h-4 w-4" />
+                          Mark Paid
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
+}
