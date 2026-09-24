@@ -5,6 +5,7 @@ import { MiniApp } from '@/components/mini-app-redesign';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import AdminPage from '@/pages/admin';
 import { configureTelegramAuth } from '@/lib/telegram';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 
@@ -20,6 +21,7 @@ function Router() {
   return (
     <RoutedErrorBoundary>
       <Switch>
+        <Route path="/admin" component={AdminPage} />
         <Route path="/" component={MiniApp} />
         <Route path="/challenge" component={MiniApp} />
         <Route path="/team" component={MiniApp} />
