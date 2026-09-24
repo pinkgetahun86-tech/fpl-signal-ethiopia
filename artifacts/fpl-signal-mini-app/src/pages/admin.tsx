@@ -448,7 +448,6 @@ export default function AdminPage() {
         {loading && withdrawals.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground">
             <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin" />
-
             Withdrawal መረጃ እየተጫነ ነው...
           </div>
         ) : withdrawals.length === 0 ? (
@@ -587,4 +586,111 @@ export default function AdminPage() {
 
                     {withdrawal.adminNote ? (
                       <div className="md:col-span-2">
-                        <div className="text-xs text-muted
+                        <div className="text-xs text-muted-foreground">
+                          Admin Note
+                        </div>
+
+                        <div className="font-medium">
+                          {withdrawal.adminNote}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {withdrawal.status === "pending" ? (
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void performAction(
+                            withdrawal.id,
+                            "approve",
+                          )
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void performAction(
+                            withdrawal.id,
+                            "reject",
+                          )
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-semibold text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+
+                        Reject
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {withdrawal.status === "approved" ? (
+                    <div className="mt-5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void performAction(
+                            withdrawal.id,
+                            "paid",
+                          )
+                        }
+                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busy ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+
+                        ክፍያ ተፈጽሟል
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {withdrawal.status === "paid" ? (
+                    <div className="mt-4 inline-flex items-center gap-2 text-sm text-green-300">
+                      <Check className="h-4 w-4" />
+                      ክፍያው ተመዝግቧል
+                    </div>
+                  ) : null}
+
+                  {withdrawal.status === "rejected" ? (
+                    <div className="mt-4 inline-flex items-center gap-2 text-sm text-red-300">
+                      <X className="h-4 w-4" />
+                      ጥያቄው ተሰርዟል
+                    </div>
+                  ) : null}
+
+                  {withdrawal.status === "pending" ? (
+                    <div className="mt-4 inline-flex items-center gap-2 text-xs text-muted-foreground">
+                      <Clock3 className="h-4 w-4" />
+                      Admin ማጽደቅ ይጠብቃል
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
