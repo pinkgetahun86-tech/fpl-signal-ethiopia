@@ -400,26 +400,6 @@ export async function createWalletWithdrawal(
 
     const wallet = await ensureWallet(tx, userId);
 
-    const withdrawalRows = await tx
-      .insert(walletWithdrawals)
-      .values({
-        walletAccountId: wallet.id,
-        telegramUserId: userId,
-        method: MANUAL_TELEBIRR_METHOD,
-        amountEtb: amount,
-        destination: cleanDestination,
-        status: "pending",
-      })
-      .returning();
-
-    const withdrawal = withdrawalRows[0];
-
-    if (!withdrawal) {
-      throw new Error(
-        "የWithdrawal ጥያቄውን ማስቀመጥ አልተቻለም።",
-      );
-    }
-
     const walletRows = await tx
       .update(walletAccounts)
       .set({
@@ -440,6 +420,26 @@ export async function createWalletWithdrawal(
     if (balanceAfter === undefined) {
       throw new Error(
         "የWallet ቀሪ ሂሳብ በቂ አይደለም።",
+      );
+    }
+
+    const withdrawalRows = await tx
+      .insert(walletWithdrawals)
+      .values({
+        walletAccountId: wallet.id,
+        telegramUserId: userId,
+        method: MANUAL_TELEBIRR_METHOD,
+        amountEtb: amount,
+        destination: cleanDestination,
+        status: "pending",
+      })
+      .returning();
+
+    const withdrawal = withdrawalRows[0];
+
+    if (!withdrawal) {
+      throw new Error(
+        "የWithdrawal ጥያቄውን ማስቀመጥ አልተቻለም።",
       );
     }
 
@@ -921,4 +921,207 @@ export async function creditWallet(
     }
 
     const ledger = await tx
-      .insert(wallet
+      .insert(walletTransactions)
+      .values({
+        walletAccountId: wallet.id,
+        telegramUserId: userId,
+        type: "credit",
+        amountEtb: amount,
+        balanceAfterEtb: updated[0].balanceEtb,
+        reference: clean,
+        description,
+      })
+      .returning();
+
+    if (!ledger[0]) {
+      throw new Error(
+        "የWallet transaction ማስቀመጥ አልተቻለም።",
+      );
+    }
+
+    return ledger[0];
+  });
+}
+
+export async function joinWeeklyChallengeWithWallet(
+  competitionId: string,
+  userId: number,
+  entryId: number,
+) {
+  return db.transaction(async (tx) => {
+    /**
+     * Same lock used by Chapa initialization.
+     * This makes Wallet and Chapa mutually exclusive.
+     */
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(
+        hashtext(${`fpl-payment:${competitionId}:${userId}`})
+      )`,
+    );
+
+    const competition = await tx
+      .select()
+      .from(gwCompetitions)
+      .where(eq(gwCompetitions.id, competitionId))
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!competition) {
+      throw new Error("ውድድሩ አልተገኘም።");
+    }
+
+    if (competition.status !== "open") {
+      throw new Error("የዚህ ሳምንት ውድድር ተዘግቷል።");
+    }
+
+    if (
+      !Number.isSafeInteger(competition.entryFeeEtb) ||
+      competition.entryFeeEtb <= 0
+    ) {
+      throw new Error("የመግቢያ ክፍያ አልተዘጋጀም።");
+    }
+
+    const entry = await tx
+      .select()
+      .from(weeklyChallengeEntries)
+      .where(
+        and(
+          eq(weeklyChallengeEntries.id, entryId),
+          eq(weeklyChallengeEntries.telegramUserId, userId),
+          eq(
+            weeklyChallengeEntries.competitionId,
+            competitionId,
+          ),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (!entry) {
+      throw new Error(
+        "የቡድን ምዝገባው አልተገኘም።",
+      );
+    }
+
+    if (entry.submissionStatus === "confirmed") {
+      return {
+        alreadyConfirmed: true,
+        walletTransaction: null,
+      };
+    }
+
+    const providerPayment = await tx
+      .select()
+      .from(gwPayments)
+      .where(
+        and(
+          eq(gwPayments.competitionId, competitionId),
+          eq(gwPayments.telegramUserId, userId),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
+
+    if (
+      providerPayment?.status === "success" ||
+      providerPayment?.status === "pending"
+    ) {
+      throw new Error(
+        "ለዚህ ውድድር የተጀመረ ወይም የተረጋገጠ የChapa ክፍያ አለ። እባክዎ ያንን ክፍያ ይጠብቁ።",
+      );
+    }
+
+    const reference = `gw-entry:${competitionId}:${userId}`;
+
+    const existingTransaction = await tx
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.reference, reference))
+      .limit(1);
+
+    if (existingTransaction[0]) {
+      await tx
+        .update(weeklyChallengeEntries)
+        .set({
+          submissionStatus: "confirmed",
+          updatedAt: new Date(),
+        })
+        .where(eq(weeklyChallengeEntries.id, entryId));
+
+      return {
+        alreadyConfirmed: true,
+        walletTransaction: existingTransaction[0],
+      };
+    }
+
+    const wallet = await ensureWallet(tx, userId);
+
+    const updatedWallet = await tx
+      .update(walletAccounts)
+      .set({
+        balanceEtb:
+          sql`${walletAccounts.balanceEtb} - ${competition.entryFeeEtb}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(walletAccounts.id, wallet.id),
+          sql`${walletAccounts.balanceEtb} >= ${competition.entryFeeEtb}`,
+        ),
+      )
+      .returning();
+
+    if (!updatedWallet[0]) {
+      throw new Error(
+        "የWallet ቀሪ ሂሳብ በቂ አይደለም።",
+      );
+    }
+
+    const ledger = await tx
+      .insert(walletTransactions)
+      .values({
+        walletAccountId: wallet.id,
+        telegramUserId: userId,
+        type: "entry_fee",
+        amountEtb: -competition.entryFeeEtb,
+        balanceAfterEtb: updatedWallet[0].balanceEtb,
+        reference,
+        description:
+          `GW${competition.gameweek} Weekly Challenge መግቢያ`,
+      })
+      .returning();
+
+    if (!ledger[0]) {
+      throw new Error(
+        "የWallet ክፍያ ማስቀመጥ አልተቻለም።",
+      );
+    }
+
+    const prizeContribution =
+      calculatePrizePoolContribution(
+        competition.entryFeeEtb,
+      );
+
+    await tx
+      .update(gwCompetitions)
+      .set({
+        prizePoolEtb:
+          sql`${gwCompetitions.prizePoolEtb} + ${prizeContribution}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(gwCompetitions.id, competition.id));
+
+    await tx
+      .update(weeklyChallengeEntries)
+      .set({
+        submissionStatus: "confirmed",
+        updatedAt: new Date(),
+      })
+      .where(eq(weeklyChallengeEntries.id, entryId));
+
+    return {
+      alreadyConfirmed: false,
+      walletTransaction: ledger[0],
+    };
+  });
+}
