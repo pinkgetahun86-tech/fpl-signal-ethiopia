@@ -1199,11 +1199,11 @@ function WalletPage() {
     }
 
     if (!transactionReference.trim()) {
-      setError(
-        'የTelebirr የግብይት ቁጥር ያስገቡ።',
-      );
-      return;
-    }
+  setError(
+    'የTelebirr SMS መልእክቱን ሙሉውን ያስገቡ።',
+  );
+  return;
+}
 
     setSubmitting(true);
     setError(null);
