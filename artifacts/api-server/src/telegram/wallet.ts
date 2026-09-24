@@ -24,6 +24,7 @@ function assertPositiveEtb(amountEtb: number): number {
   if (!Number.isSafeInteger(amountEtb) || amountEtb <= 0) {
     throw new Error("የገንዘብ መጠኑ ትክክል አይደለም።");
   }
+
   return amountEtb;
 }
 
@@ -143,9 +144,6 @@ export async function listUserDeposits(
     .limit(safeLimit);
 }
 
-/**
- * List the user's withdrawal requests.
- */
 export async function listUserWithdrawals(
   userId: number,
   limit = 20,
@@ -163,12 +161,6 @@ export async function listUserWithdrawals(
     .limit(safeLimit);
 }
 
-/**
- * Create a manual Telebirr deposit request.
- *
- * The money is NOT added to the wallet until an admin approves
- * the deposit.
- */
 export async function createManualTelebirrDeposit(
   user: DbTelegramUser,
   amountEtb: number,
@@ -265,7 +257,8 @@ export async function approveWalletDeposit(
     const walletRows = await tx
       .update(walletAccounts)
       .set({
-        balanceEtb: sql`${walletAccounts.balanceEtb} + ${deposit.amountEtb}`,
+        balanceEtb:
+          sql`${walletAccounts.balanceEtb} + ${deposit.amountEtb}`,
         updatedAt: new Date(),
       })
       .where(eq(walletAccounts.id, wallet.id))
@@ -385,13 +378,9 @@ export async function rejectWalletDeposit(
 /**
  * Create a withdrawal request.
  *
- * Important:
- * The requested amount is reserved immediately by deducting it
- * from the wallet in the SAME transaction that creates the
- * withdrawal ledger entry.
- *
- * Therefore two simultaneous withdrawal requests cannot spend
- * the same balance.
+ * The amount is reserved immediately by deducting it from the
+ * wallet in the same transaction that creates the withdrawal
+ * ledger entry.
  */
 export async function createWalletWithdrawal(
   userId: number,
@@ -411,13 +400,6 @@ export async function createWalletWithdrawal(
 
     const wallet = await ensureWallet(tx, userId);
 
-    /**
-     * Create the withdrawal row first so that we have its
-     * database id for the unique ledger reference.
-     *
-     * If any following operation fails, the entire transaction
-     * rolls back, including this row.
-     */
     const withdrawalRows = await tx
       .insert(walletWithdrawals)
       .values({
@@ -438,12 +420,6 @@ export async function createWalletWithdrawal(
       );
     }
 
-    /**
-     * Atomic balance reservation.
-     *
-     * The WHERE condition guarantees that the balance can never
-     * become negative.
-     */
     const walletRows = await tx
       .update(walletAccounts)
       .set({
@@ -495,12 +471,6 @@ export async function createWalletWithdrawal(
   });
 }
 
-/**
- * Approve a pending withdrawal.
- *
- * Approval does NOT change the wallet balance because the amount
- * was already reserved when the request was created.
- */
 export async function approveWalletWithdrawal(
   withdrawalId: number,
   adminNote?: string,
@@ -580,15 +550,6 @@ export async function approveWalletWithdrawal(
   });
 }
 
-/**
- * Reject a pending withdrawal.
- *
- * Because the amount was reserved at request time, rejection
- * releases the reservation by crediting the exact amount back.
- *
- * The refund has its own unique ledger reference, so it can
- * never be credited twice.
- */
 export async function rejectWalletWithdrawal(
   withdrawalId: number,
   adminNote?: string,
@@ -674,14 +635,8 @@ export async function rejectWalletWithdrawal(
         })
         .where(
           and(
-            eq(
-              walletWithdrawals.id,
-              withdrawal.id,
-            ),
-            eq(
-              walletWithdrawals.status,
-              "pending",
-            ),
+            eq(walletWithdrawals.id, withdrawal.id),
+            eq(walletWithdrawals.status, "pending"),
           ),
         )
         .returning();
@@ -757,12 +712,6 @@ export async function rejectWalletWithdrawal(
   });
 }
 
-/**
- * Mark an approved withdrawal as paid.
- *
- * This does NOT change wallet balance. The wallet was already
- * debited when the request was created.
- */
 export async function markWalletWithdrawalPaid(
   withdrawalId: number,
   payoutReference: string,
@@ -894,7 +843,8 @@ export async function debitWallet(
     const updated = await tx
       .update(walletAccounts)
       .set({
-        balanceEtb: sql`${walletAccounts.balanceEtb} - ${amount}`,
+        balanceEtb:
+          sql`${walletAccounts.balanceEtb} - ${amount}`,
         updatedAt: new Date(),
       })
       .where(
@@ -959,7 +909,8 @@ export async function creditWallet(
     const updated = await tx
       .update(walletAccounts)
       .set({
-        balanceEtb: sql`${walletAccounts.balanceEtb} + ${amount}`,
+        balanceEtb:
+          sql`${walletAccounts.balanceEtb} + ${amount}`,
         updatedAt: new Date(),
       })
       .where(eq(walletAccounts.id, wallet.id))
@@ -970,114 +921,4 @@ export async function creditWallet(
     }
 
     const ledger = await tx
-      .insert(walletTransactions)
-      .values({
-        walletAccountId: wallet.id,
-        telegramUserId: userId,
-        type: "credit",
-        amountEtb: amount,
-        balanceAfterEtb: updated[0].balanceEtb,
-        reference: clean,
-        description,
-      })
-      .returning();
-
-    if (!ledger[0]) {
-      throw new Error(
-        "የWallet transaction ማስቀመጥ አልተቻለም።",
-      );
-    }
-
-    return ledger[0];
-  });
-}
-
-export async function joinWeeklyChallengeWithWallet(
-  competitionId: string,
-  userId: number,
-  entryId: number,
-) {
-  return db.transaction(async (tx) => {
-    /**
-     * Same lock used by Chapa initialization.
-     * This makes Wallet and Chapa mutually exclusive.
-     */
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(
-        hashtext(${`fpl-payment:${competitionId}:${userId}`})
-      )`,
-    );
-
-    const competition = await tx
-      .select()
-      .from(gwCompetitions)
-      .where(eq(gwCompetitions.id, competitionId))
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (!competition) {
-      throw new Error("ውድድሩ አልተገኘም።");
-    }
-
-    if (competition.status !== "open") {
-      throw new Error("የዚህ ሳምንት ውድድር ተዘግቷል።");
-    }
-
-    if (
-      !Number.isSafeInteger(competition.entryFeeEtb) ||
-      competition.entryFeeEtb <= 0
-    ) {
-      throw new Error("የመግቢያ ክፍያ አልተዘጋጀም።");
-    }
-
-    const entry = await tx
-      .select()
-      .from(weeklyChallengeEntries)
-      .where(
-        and(
-          eq(weeklyChallengeEntries.id, entryId),
-          eq(weeklyChallengeEntries.telegramUserId, userId),
-          eq(
-            weeklyChallengeEntries.competitionId,
-            competitionId,
-          ),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (!entry) {
-      throw new Error(
-        "የቡድን ምዝገባው አልተገኘም።",
-      );
-    }
-
-    if (entry.submissionStatus === "confirmed") {
-      return {
-        alreadyConfirmed: true,
-        walletTransaction: null,
-      };
-    }
-
-    /**
-     * A Chapa payment already pending/success means the same
-     * competition cannot also be paid from Wallet.
-     */
-    const providerPayment = await tx
-      .select()
-      .from(gwPayments)
-      .where(
-        and(
-          eq(gwPayments.competitionId, competitionId),
-          eq(gwPayments.telegramUserId, userId),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0]);
-
-    if (
-      providerPayment?.status === "success" ||
-      providerPayment?.status === "pending"
-    ) {
-      throw new Error(
-        "ለዚህ ውድድር የተጀመረ ወይም የተረጋገጠ የChapa ክፍያ አለ። እባክዎ ያንን ክ
+      .insert(wallet
