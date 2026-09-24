@@ -116,7 +116,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
 
   const loadWithdrawals = useCallback(async () => {
-    if (!token) return;
+    if (!token.trim()) return;
 
     setLoading(true);
     setError("");
@@ -126,6 +126,7 @@ export default function AdminPage() {
         await customFetch<WithdrawalsResponse>(
           "/api/admin/wallet/withdrawals?limit=200",
           {
+            method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -209,6 +210,13 @@ export default function AdminPage() {
 
       if (!payoutReference) {
         setError("Payout Reference ያስፈልጋል።");
+        return;
+      }
+
+      if (payoutReference.length > 120) {
+        setError(
+          "Payout Reference ከ120 ፊደላት መብለጥ የለበትም።",
+        );
         return;
       }
     }
@@ -504,4 +512,79 @@ export default function AdminPage() {
                         Telebirr
                       </div>
 
-                      <div className="font-medium
+                      <div className="break-all font-medium">
+                        {withdrawal.destination || "—"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Created
+                      </div>
+
+                      <div className="font-medium">
+                        {formatDate(withdrawal.createdAt)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">
+                        Updated
+                      </div>
+
+                      <div className="font-medium">
+                        {formatDate(withdrawal.updatedAt)}
+                      </div>
+                    </div>
+
+                    {withdrawal.approvedAt ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          Approved
+                        </div>
+
+                        <div className="font-medium">
+                          {formatDate(withdrawal.approvedAt)}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {withdrawal.rejectedAt ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          Rejected
+                        </div>
+
+                        <div className="font-medium">
+                          {formatDate(withdrawal.rejectedAt)}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {withdrawal.paidAt ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          Paid
+                        </div>
+
+                        <div className="font-medium">
+                          {formatDate(withdrawal.paidAt)}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {withdrawal.payoutReference ? (
+                      <div>
+                        <div className="text-xs text-muted-foreground">
+                          Payout Reference
+                        </div>
+
+                        <div className="break-all font-medium">
+                          {withdrawal.payoutReference}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {withdrawal.adminNote ? (
+                      <div className="md:col-span-2">
+                        <div className="text-xs text-muted
