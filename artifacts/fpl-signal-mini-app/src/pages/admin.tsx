@@ -11,10 +11,13 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { customFetch } from "@workspace/api-client-react";
 
-import { customFetch, extractApiErrorMessage } from "@/lib/api";
-
-type WithdrawalStatus = "pending" | "approved" | "rejected" | "paid";
+type WithdrawalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "paid";
 
 type Withdrawal = {
   id: number;
@@ -60,12 +63,18 @@ function statusClass(status: WithdrawalStatus) {
   switch (status) {
     case "pending":
       return "border-yellow-500/30 bg-yellow-500/10 text-yellow-300";
+
     case "approved":
       return "border-blue-500/30 bg-blue-500/10 text-blue-300";
+
     case "paid":
       return "border-green-500/30 bg-green-500/10 text-green-300";
+
     case "rejected":
       return "border-red-500/30 bg-red-500/10 text-red-300";
+
+    default:
+      return "border-border bg-card text-foreground";
   }
 }
 
@@ -77,13 +86,50 @@ function getErrorMessage(error: unknown) {
   return "አንድ ችግር ተፈጥሯል።";
 }
 
+async function getResponseError(response: Response) {
+  try {
+    const data = await response.clone().json();
+
+    if (
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof data.error === "string"
+    ) {
+      return data.error;
+    }
+
+    if (
+      data &&
+      typeof data === "object" &&
+      "message" in data &&
+      typeof data.message === "string"
+    ) {
+      return data.message;
+    }
+  } catch {
+    // Ignore JSON parsing errors and use status text below.
+  }
+
+  return (
+    response.statusText ||
+    `Request failed with status ${response.status}`
+  );
+}
+
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [tokenInput, setTokenInput] = useState("");
 
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>(
+    [],
+  );
+
   const [loading, setLoading] = useState(false);
-  const [actingId, setActingId] = useState<number | null>(null);
+  const [actingId, setActingId] = useState<number | null>(
+    null,
+  );
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
@@ -94,7 +140,7 @@ export default function AdminPage() {
     setError("");
 
     try {
-      const response = await customFetch(
+      const response = await customFetch<Response>(
         "/api/admin/wallet/withdrawals?limit=200",
         {
           headers: {
@@ -104,9 +150,7 @@ export default function AdminPage() {
       );
 
       if (!response.ok) {
-        throw new Error(
-          await extractApiErrorMessage(response),
-        );
+        throw new Error(await getResponseError(response));
       }
 
       const data = await response.json();
@@ -124,7 +168,8 @@ export default function AdminPage() {
   }, [token]);
 
   useEffect(() => {
-    const savedToken = window.sessionStorage.getItem(TOKEN_KEY);
+    const savedToken =
+      window.sessionStorage.getItem(TOKEN_KEY);
 
     if (savedToken) {
       setToken(savedToken);
@@ -148,13 +193,16 @@ export default function AdminPage() {
     }
 
     window.sessionStorage.setItem(TOKEN_KEY, value);
+
     setToken(value);
     setTokenInput("");
     setError("");
+    setMessage("");
   }
 
   function logout() {
     window.sessionStorage.removeItem(TOKEN_KEY);
+
     setToken("");
     setWithdrawals([]);
     setError("");
@@ -166,6 +214,7 @@ export default function AdminPage() {
     action: "approve" | "reject" | "paid",
   ) {
     let payoutReference: string | undefined;
+    let adminNote: string | undefined;
 
     if (action === "paid") {
       const value = window.prompt(
@@ -183,8 +232,6 @@ export default function AdminPage() {
         return;
       }
     }
-
-    let adminNote: string | undefined;
 
     if (action === "reject") {
       const value = window.prompt(
@@ -213,7 +260,7 @@ export default function AdminPage() {
               }
             : undefined;
 
-      const response = await customFetch(
+      const response = await customFetch<Response>(
         `/api/admin/wallet/withdrawals/${withdrawalId}/${action}`,
         {
           method: "POST",
@@ -230,18 +277,22 @@ export default function AdminPage() {
       );
 
       if (!response.ok) {
-        throw new Error(
-          await extractApiErrorMessage(response),
-        );
+        throw new Error(await getResponseError(response));
       }
 
-      setMessage(
-        action === "approve"
-          ? "የWithdrawal ጥያቄው ተፈቅዷል።"
-          : action === "reject"
-            ? "የWithdrawal ጥያቄው ተሰርዟል። ገንዘቡም ወደ Wallet ተመልሷል።"
-            : "ክፍያው እንደተፈጸመ ተመዝግቧል።",
-      );
+      if (action === "approve") {
+        setMessage(
+          "የWithdrawal ጥያቄው ተፈቅዷል።",
+        );
+      } else if (action === "reject") {
+        setMessage(
+          "የWithdrawal ጥያቄው ተሰርዟል። ገንዘቡም ወደ Wallet ተመልሷል።",
+        );
+      } else {
+        setMessage(
+          "ክፍያው እንደተፈጸመ ተመዝግቧል።",
+        );
+      }
 
       await loadWithdrawals();
     } catch (err) {
@@ -261,10 +312,14 @@ export default function AdminPage() {
             </h1>
 
             <p className="mb-6 text-sm text-muted-foreground">
-              Admin Token በማስገባት የWallet Withdrawal አስተዳደርን ይክፈቱ።
+              Admin Token በማስገባት የWallet Withdrawal
+              አስተዳደርን ይክፈቱ።
             </p>
 
-            <form onSubmit={login} className="space-y-4">
+            <form
+              onSubmit={login}
+              className="space-y-4"
+            >
               <input
                 type="password"
                 value={tokenInput}
@@ -368,6 +423,7 @@ export default function AdminPage() {
             <div className="text-sm text-muted-foreground">
               Pending
             </div>
+
             <div className="mt-1 text-2xl font-bold">
               {pendingCount}
             </div>
@@ -377,6 +433,7 @@ export default function AdminPage() {
             <div className="text-sm text-muted-foreground">
               Approved
             </div>
+
             <div className="mt-1 text-2xl font-bold">
               {approvedCount}
             </div>
@@ -386,6 +443,7 @@ export default function AdminPage() {
             <div className="text-sm text-muted-foreground">
               Paid
             </div>
+
             <div className="mt-1 text-2xl font-bold">
               {paidCount}
             </div>
@@ -395,6 +453,7 @@ export default function AdminPage() {
             <div className="text-sm text-muted-foreground">
               Rejected
             </div>
+
             <div className="mt-1 text-2xl font-bold">
               {rejectedCount}
             </div>
@@ -404,6 +463,7 @@ export default function AdminPage() {
         {loading && withdrawals.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground">
             <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin" />
+
             Withdrawal መረጃ እየተጫነ ነው...
           </div>
         ) : withdrawals.length === 0 ? (
@@ -446,6 +506,7 @@ export default function AdminPage() {
                       <div className="text-xs text-muted-foreground">
                         Telegram User ID
                       </div>
+
                       <div className="font-medium">
                         {withdrawal.telegramUserId}
                       </div>
@@ -455,6 +516,7 @@ export default function AdminPage() {
                       <div className="text-xs text-muted-foreground">
                         Method
                       </div>
+
                       <div className="font-medium">
                         {withdrawal.method}
                       </div>
@@ -464,6 +526,7 @@ export default function AdminPage() {
                       <div className="text-xs text-muted-foreground">
                         Telebirr
                       </div>
+
                       <div className="font-medium">
                         {withdrawal.destination}
                       </div>
@@ -473,6 +536,7 @@ export default function AdminPage() {
                       <div className="text-xs text-muted-foreground">
                         Created
                       </div>
+
                       <div className="font-medium">
                         {formatDate(withdrawal.createdAt)}
                       </div>
@@ -483,6 +547,7 @@ export default function AdminPage() {
                         <div className="text-xs text-muted-foreground">
                           Payout Reference
                         </div>
+
                         <div className="break-all font-medium">
                           {withdrawal.payoutReference}
                         </div>
@@ -494,6 +559,7 @@ export default function AdminPage() {
                         <div className="text-xs text-muted-foreground">
                           Admin Note
                         </div>
+
                         <div className="font-medium">
                           {withdrawal.adminNote}
                         </div>
@@ -516,6 +582,7 @@ export default function AdminPage() {
                           className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
                         >
                           <Check className="h-4 w-4" />
+
                           {busy
                             ? "በመስራት ላይ..."
                             : "Approve"}
@@ -533,6 +600,7 @@ export default function AdminPage() {
                           className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
                         >
                           <X className="h-4 w-4" />
+
                           Reject
                         </button>
                       </>
@@ -551,6 +619,7 @@ export default function AdminPage() {
                         className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                       >
                         <Check className="h-4 w-4" />
+
                         {busy
                           ? "በመስራት ላይ..."
                           : "Mark as Paid"}
@@ -560,6 +629,7 @@ export default function AdminPage() {
                     {withdrawal.status === "paid" ? (
                       <div className="inline-flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm text-green-300">
                         <Check className="h-4 w-4" />
+
                         ክፍያ ተመዝግቧል
                       </div>
                     ) : null}
@@ -567,6 +637,7 @@ export default function AdminPage() {
                     {withdrawal.status === "rejected" ? (
                       <div className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
                         <X className="h-4 w-4" />
+
                         ጥያቄው ተሰርዟል
                       </div>
                     ) : null}
@@ -575,6 +646,7 @@ export default function AdminPage() {
                   {withdrawal.status === "pending" ? (
                     <div className="mt-3 flex items-center gap-2 text-xs text-yellow-300">
                       <Clock3 className="h-4 w-4" />
+
                       ተጠቃሚው የwithdrawal ጥያቄ አቅርቧል።
                     </div>
                   ) : null}
