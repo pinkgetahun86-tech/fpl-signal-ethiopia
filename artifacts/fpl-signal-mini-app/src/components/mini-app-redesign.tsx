@@ -1369,76 +1369,86 @@ function WalletPage() {
         </p>
       </section>
 
-      <section className="simple-card">
-        <div className="card-heading">
-          <div>
-            <p className="eyebrow">Deposit</p>
-            <h2>በTelebirr ገንዘብ ያስገቡ</h2>
-          </div>
-          <Activity className="heading-icon" />
-        </div>
+<section className="simple-card">
+  <div className="card-heading">
+    <div>
+      <p className="eyebrow">Deposit</p>
+      <h2>በTelebirr ገንዘብ ያስገቡ</h2>
+    </div>
+    <Activity className="heading-icon" />
+  </div>
 
-        <form
-          onSubmit={submitDeposit}
-          className="form-stack"
-        >
-          <label>
-            <span>መጠን (ETB)</span>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={amount}
-              onChange={(event) =>
-                setAmount(event.target.value)
-              }
-              placeholder="ለምሳሌ 100"
-              inputMode="numeric"
-            />
-          </label>
+  <div className="notice">
+    <Info className="h-4 w-4 shrink-0" />
+    <span>
+      <strong>📱 FPL Signal Telebirr: 0940504900</strong>
+      <br />
+      ወደዚህ ቁጥር ገንዘብ ይላኩ።
+      <br />
+      ከላኩ በኋላ ከTelebirr የደረስዎትን SMS
+      መልእክት ሙሉውን Copy አድርገው
+      ከታች ያስገቡ።
+    </span>
+  </div>
 
-          <label>
-            <span>
-              የTelebirr ግብይት ቁጥር
-            </span>
-            <input
-              type="text"
-              value={transactionReference}
-              onChange={(event) =>
-                setTransactionReference(
-                  event.target.value,
-                )
-              }
-              placeholder="የግብይት ቁጥር ያስገቡ"
-            />
-          </label>
+  <form
+    onSubmit={submitDeposit}
+    className="form-stack"
+  >
+    <label>
+      <span>መጠን (ETB)</span>
+      <input
+        type="number"
+        min="1"
+        step="1"
+        value={amount}
+        onChange={(event) =>
+          setAmount(event.target.value)
+        }
+        placeholder="ለምሳሌ 100"
+        inputMode="numeric"
+      />
+    </label>
 
-          <button
-            type="submit"
-            className="button button-primary button-large"
-            disabled={submitting}
-          >
-            {submitting ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <WalletCards className="h-4 w-4" />
-            )}
-            {submitting
-              ? 'በመላክ ላይ…'
-              : 'Deposit አስገባ'}
-          </button>
-        </form>
+    <label>
+      <span>የTelebirr SMS መልእክት</span>
+      <textarea
+        value={transactionReference}
+        onChange={(event) =>
+          setTransactionReference(event.target.value)
+        }
+        placeholder="የTelebirr SMS መልእክቱን ሙሉውን Paste ያድርጉ"
+        rows={6}
+      />
+    </label>
 
-        <div className="notice">
-          <Info className="h-4 w-4 shrink-0" />
-          <span>
-            ከTelebirr ወደ ፕሮጀክቱ ሂሳብ ከላኩ
-            በኋላ የግብይት ቁጥሩን እዚህ ያስገቡ።
-            አስተዳዳሪ ካረጋገጠው በኋላ ገንዘቡ
-            Wallet ውስጥ ይገባል።
-          </span>
-        </div>
-      </section>
+    <button
+      type="submit"
+      className="button button-primary button-large"
+      disabled={submitting}
+    >
+      {submitting ? (
+        <RefreshCw className="h-4 w-4 animate-spin" />
+      ) : (
+        <WalletCards className="h-4 w-4" />
+      )}
+
+      {submitting
+        ? 'በመላክ ላይ…'
+        : 'Deposit አስገባ'}
+    </button>
+  </form>
+
+  <div className="notice">
+    <Info className="h-4 w-4 shrink-0" />
+    <span>
+      ገንዘቡን ከላኩ በኋላ የTelebirr SMS
+      መልእክቱን ሙሉውን ያስገቡ።
+      አስተዳዳሪ ክፍያውን ካረጋገጠ በኋላ
+      Wallet ዎ ይሞላል።
+    </span>
+  </div>
+</section>
 
       <section className="simple-card">
         <div className="card-heading">
