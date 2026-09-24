@@ -28,6 +28,7 @@ function Router() {
         <Route path="/leaderboard" component={MiniApp} />
         <Route path="/points" component={MiniApp} />
         <Route path="/signal" component={MiniApp} />
+        <Route path="/wallet" component={MiniApp} />
         <Route path="/about" component={MiniApp} />
         <Route component={NotFound} />
       </Switch>
