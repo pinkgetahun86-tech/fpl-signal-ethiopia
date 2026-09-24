@@ -35,6 +35,10 @@ type Withdrawal = {
   updatedAt: string;
 };
 
+type WithdrawalsResponse = {
+  withdrawals: Withdrawal[];
+};
+
 const TOKEN_KEY = "fpl_signal_admin_token";
 
 const statusLabel: Record<WithdrawalStatus, string> = {
@@ -83,38 +87,16 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "አንድ ችግር ተፈጥሯል።";
-}
-
-async function getResponseError(response: Response) {
-  try {
-    const data = await response.clone().json();
-
-    if (
-      data &&
-      typeof data === "object" &&
-      "error" in data &&
-      typeof data.error === "string"
-    ) {
-      return data.error;
-    }
-
-    if (
-      data &&
-      typeof data === "object" &&
-      "message" in data &&
-      typeof data.message === "string"
-    ) {
-      return data.message;
-    }
-  } catch {
-    // Ignore JSON parsing errors and use status text below.
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
   }
 
-  return (
-    response.statusText ||
-    `Request failed with status ${response.status}`
-  );
+  return "አንድ ችግር ተፈጥሯል።";
 }
 
 export default function AdminPage() {
@@ -140,28 +122,26 @@ export default function AdminPage() {
     setError("");
 
     try {
-      const response = await customFetch<Response>(
-        "/api/admin/wallet/withdrawals?limit=200",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
+      const data =
+        await customFetch<WithdrawalsResponse>(
+          "/api/admin/wallet/withdrawals?limit=200",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            responseType: "json",
+            cache: "no-store",
           },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(await getResponseError(response));
-      }
-
-      const data = await response.json();
+        );
 
       setWithdrawals(
-        Array.isArray(data.withdrawals)
+        Array.isArray(data?.withdrawals)
           ? data.withdrawals
           : [],
       );
     } catch (err) {
       setError(getErrorMessage(err));
+      setWithdrawals([]);
     } finally {
       setLoading(false);
     }
@@ -260,7 +240,7 @@ export default function AdminPage() {
               }
             : undefined;
 
-      const response = await customFetch<Response>(
+      await customFetch(
         `/api/admin/wallet/withdrawals/${withdrawalId}/${action}`,
         {
           method: "POST",
@@ -273,12 +253,9 @@ export default function AdminPage() {
                 body: JSON.stringify(body),
               }
             : {}),
+          responseType: "json",
         },
       );
-
-      if (!response.ok) {
-        throw new Error(await getResponseError(response));
-      }
 
       if (action === "approve") {
         setMessage(
@@ -527,135 +504,4 @@ export default function AdminPage() {
                         Telebirr
                       </div>
 
-                      <div className="font-medium">
-                        {withdrawal.destination}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Created
-                      </div>
-
-                      <div className="font-medium">
-                        {formatDate(withdrawal.createdAt)}
-                      </div>
-                    </div>
-
-                    {withdrawal.payoutReference ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Payout Reference
-                        </div>
-
-                        <div className="break-all font-medium">
-                          {withdrawal.payoutReference}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {withdrawal.adminNote ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Admin Note
-                        </div>
-
-                        <div className="font-medium">
-                          {withdrawal.adminNote}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {withdrawal.status === "pending" ? (
-                      <>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void performAction(
-                              withdrawal.id,
-                              "approve",
-                            )
-                          }
-                          className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-                        >
-                          <Check className="h-4 w-4" />
-
-                          {busy
-                            ? "በመስራት ላይ..."
-                            : "Approve"}
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() =>
-                            void performAction(
-                              withdrawal.id,
-                              "reject",
-                            )
-                          }
-                          className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-300 disabled:opacity-50"
-                        >
-                          <X className="h-4 w-4" />
-
-                          Reject
-                        </button>
-                      </>
-                    ) : null}
-
-                    {withdrawal.status === "approved" ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void performAction(
-                            withdrawal.id,
-                            "paid",
-                          )
-                        }
-                        className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                      >
-                        <Check className="h-4 w-4" />
-
-                        {busy
-                          ? "በመስራት ላይ..."
-                          : "Mark as Paid"}
-                      </button>
-                    ) : null}
-
-                    {withdrawal.status === "paid" ? (
-                      <div className="inline-flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm text-green-300">
-                        <Check className="h-4 w-4" />
-
-                        ክፍያ ተመዝግቧል
-                      </div>
-                    ) : null}
-
-                    {withdrawal.status === "rejected" ? (
-                      <div className="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-300">
-                        <X className="h-4 w-4" />
-
-                        ጥያቄው ተሰርዟል
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {withdrawal.status === "pending" ? (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-yellow-300">
-                      <Clock3 className="h-4 w-4" />
-
-                      ተጠቃሚው የwithdrawal ጥያቄ አቅርቧል።
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </main>
-  );
-}
+                      <div className="font-medium
