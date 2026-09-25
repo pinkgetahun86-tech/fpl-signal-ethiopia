@@ -834,44 +834,7 @@
     setWalletPaymentLoading(false);
   }
 };
-‎      
-‎      return;
-‎    }
-‎
-‎    setWalletPaymentLoading(true);
-‎    setPaymentError(null);
-‎
-‎    try {
-‎      const result = await customFetch<
-‎        MiniAppBootstrap & {
-‎          wallet: {
-‎            balanceEtb: number;
-‎            currency: string;
-‎          };
-‎          payment: {
-‎            method: 'wallet';
-‎            status: 'success';
-‎            amountEtb: number;
-‎            alreadyConfirmed: boolean;
-‎          };
-‎        }
-‎      >('/api/mini-app/wallet/entry', {
-‎        method: 'POST',
-‎        responseType: 'json',
-‎      });
-‎
-‎      setWalletBalance(result.wallet.balanceEtb);
-‎      update(result);
-‎    } catch (error) {
-‎      setPaymentError(
-‎        extractApiErrorMessage(error) ??
-‎          'በWallet መክፈል አልተሳካም።',
-‎      );
-‎    } finally {
-‎      setWalletPaymentLoading(false);
-‎    }
-‎  };
-‎
+‎‎
 ‎  return (
 ‎    <div className="page-stack">
 ‎      <SectionTitle
