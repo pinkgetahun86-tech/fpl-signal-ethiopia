@@ -520,7 +520,7 @@ export async function approveWalletWithdrawal(
 
     if (withdrawal.status !== "pending") {
       throw new Error(
-        "ይህ Withdrawal ሊፀድቅ አይችልም።",
+        "ይህ Withdrawal ሊፀድቅ አይቻልም።",
       );
     }
 
@@ -950,8 +950,21 @@ export async function joinWeeklyChallengeWithWallet(
 ) {
   return db.transaction(async (tx) => {
     /**
+     * Competition-level lock.
+     *
+     * Admin fee changes use the same lock so an entry cannot
+     * race with a fee update for the same competition.
+     */
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(
+        hashtext(${`fpl-competition:${competitionId}`})
+      )`,
+    );
+
+    /**
      * Same lock used by Chapa initialization.
-     * This makes Wallet and Chapa mutually exclusive.
+     * This makes Wallet and Chapa mutually exclusive
+     * for the same user + competition.
      */
     await tx.execute(
       sql`select pg_advisory_xact_lock(
