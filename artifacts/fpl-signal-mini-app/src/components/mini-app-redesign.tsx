@@ -574,6 +574,51 @@ const [walletLoading, setWalletLoading] = useState(false);
 const [walletPaymentLoading, setWalletPaymentLoading] = useState(false);
   useEffect(() => {
   if (data.team.submissionStatus !== 'awaiting_payment') {
+    setEntryFeeEtb(null);
+    return;
+  }
+
+  let active = true;
+
+  const loadCompetition = async () => {
+    setCompetitionLoading(true);
+
+    try {
+      const result = await customFetch<{
+        competitionId: number;
+        gameweek: number;
+        entryFeeEtb: number;
+        currency: string;
+        status: string;
+        locked: boolean;
+        deadlineTime: string | null;
+      }>('/api/mini-app/competition/current', {
+        method: 'GET',
+        responseType: 'json',
+      });
+
+      if (active) {
+        setEntryFeeEtb(result.entryFeeEtb);
+      }
+    } catch {
+      if (active) {
+        setEntryFeeEtb(null);
+      }
+    } finally {
+      if (active) {
+        setCompetitionLoading(false);
+      }
+    }
+  };
+
+  void loadCompetition();
+
+  return () => {
+    active = false;
+  };
+}, [data.team.submissionStatus]);
+  useEffect(() => {
+  if (data.team.submissionStatus !== 'awaiting_payment') {
     setWalletBalance(null);
     return;
   }
@@ -796,11 +841,18 @@ useEffect(() => {
   };
 }, [data.team.submissionStatus]);
     const payWithWallet = async () => {
-  if (walletBalance === null || walletBalance < 100) {
-    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
-    return;
-  }
+  
+if (entryFeeEtb === null) {
+  setPaymentError('የውድድሩን መግቢያ ክፍያ ማግኘት አልተቻለም።');
+  return;
+}
 
+if (walletBalance === null || walletBalance < entryFeeEtb) {
+  setPaymentError(
+    `በWallet ውስጥ ቢያንስ ${entryFeeEtb} ETB ያስፈልጋል።`,
+  );
+  return;
+}
   setWalletPaymentLoading(true);
   setPaymentError(null);
 
@@ -835,18 +887,7 @@ useEffect(() => {
   }
 };
 
-const startPayment = async () => {
-  setPaymentLoading(true);
-  setPaymentError(null);
 
-  try {
-    const result = await customFetch<{ checkoutUrl: string }>(
-      '/api/mini-app/payment/initialize',
-      {
-        method: 'POST',
-        responseType: 'json',
-      },
-    );
 
     window.location.href = result.checkoutUrl;
   } catch {
