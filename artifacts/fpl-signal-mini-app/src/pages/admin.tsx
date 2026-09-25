@@ -1,55 +1,49 @@
+import { useCallback, useEffect, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
-import {
-  Check,
+  CheckCircle2,
   Clock3,
   LogOut,
   RefreshCw,
-  X,
+  ShieldCheck,
+  XCircle,
 } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
 
-type WithdrawalStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "paid";
+const ADMIN_TOKEN_KEY = "fpl_signal_admin_token";
+
+type DepositStatus = "pending" | "approved" | "rejected";
+
+type Deposit = {
+  id: string;
+  walletAccountId?: string;
+  telegramUserId?: string;
+  method?: string;
+  amountEtb?: string | number;
+  transactionReference?: string | null;
+  status?: DepositStatus | string;
+  adminNote?: string | null;
+  approvedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type WithdrawalStatus = "pending" | "approved" | "paid" | "rejected";
 
 type Withdrawal = {
-  id: number;
-  telegramUserId: number;
-  method: string;
-  amountEtb: number;
-  destination: string;
-  status: WithdrawalStatus;
-  payoutReference: string | null;
-  adminNote: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  paidAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  id: string;
+  walletAccountId?: string;
+  telegramUserId?: string;
+  amountEtb?: string | number;
+  method?: string;
+  payoutReference?: string | null;
+  status?: WithdrawalStatus | string;
+  adminNote?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-type WithdrawalsResponse = {
-  withdrawals: Withdrawal[];
-};
-
-const TOKEN_KEY = "fpl_signal_admin_token";
-
-const statusLabel: Record<WithdrawalStatus, string> = {
-  pending: "በመጠባበቅ ላይ",
-  approved: "ተፈቅዷል",
-  rejected: "ተሰርዟል",
-  paid: "ተከፍሏል",
-};
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
+function formatDate(value?: string | null) {
+  if (!value) return "-";
 
   const date = new Date(value);
 
@@ -57,333 +51,467 @@ function formatDate(value: string | null) {
     return value;
   }
 
-  return date.toLocaleString("am-ET", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return date.toLocaleString();
 }
 
-function statusClass(status: WithdrawalStatus) {
+function formatAmount(value?: string | number) {
+  const amount = Number(value ?? 0);
+
+  if (Number.isNaN(amount)) {
+    return "0.00 ETB";
+  }
+
+  return `${amount.toFixed(2)} ETB`;
+}
+
+function methodLabel(method?: string) {
+  if (!method) return "-";
+
+  if (method === "telebirr_manual") {
+    return "Telebirr";
+  }
+
+  return method;
+}
+
+function statusClass(status?: string) {
   switch (status) {
     case "pending":
-      return "border-yellow-500/30 bg-yellow-500/10 text-yellow-300";
-
+      return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
     case "approved":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-300";
-
+      return "bg-green-500/10 text-green-400 border-green-500/20";
     case "paid":
-      return "border-green-500/30 bg-green-500/10 text-green-300";
-
+      return "bg-blue-500/10 text-blue-400 border-blue-500/20";
     case "rejected":
-      return "border-red-500/30 bg-red-500/10 text-red-300";
-
+      return "bg-red-500/10 text-red-400 border-red-500/20";
     default:
-      return "border-border bg-card text-foreground";
+      return "bg-white/5 text-white/60 border-white/10";
   }
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-
-  return "አንድ ችግር ተፈጥሯል።";
 }
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
-  const [tokenInput, setTokenInput] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
 
-  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>(
-    [],
-  );
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
 
-  const [loading, setLoading] = useState(false);
-  const [actingId, setActingId] = useState<number | null>(
-    null,
-  );
+  const [loadingDeposits, setLoadingDeposits] = useState(false);
+  const [loadingWithdrawals, setLoadingWithdrawals] = useState(false);
+
+  const [actionId, setActionId] = useState<string | null>(null);
 
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-
-  const loadWithdrawals = useCallback(async () => {
-    if (!token.trim()) return;
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const data =
-        await customFetch<WithdrawalsResponse>(
-          "/api/admin/wallet/withdrawals?limit=200",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            responseType: "json",
-            cache: "no-store",
-          },
-        );
-
-      setWithdrawals(
-        Array.isArray(data?.withdrawals)
-          ? data.withdrawals
-          : [],
-      );
-    } catch (err) {
-      setError(getErrorMessage(err));
-      setWithdrawals([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const savedToken =
-      window.sessionStorage.getItem(TOKEN_KEY);
+    const savedToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
 
     if (savedToken) {
       setToken(savedToken);
+      setLoggedIn(true);
     }
   }, []);
 
-  useEffect(() => {
-    if (token) {
-      void loadWithdrawals();
+  const loadDeposits = useCallback(async () => {
+    if (!token) return;
+
+    setLoadingDeposits(true);
+
+    try {
+      const response = await customFetch<{
+        deposits: Deposit[];
+      }>("/api/admin/wallet/deposits", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        responseType: "json",
+      });
+
+      setDeposits(response.deposits ?? []);
+    } catch (err) {
+      console.error(err);
+      setError("Wallet Deposits መረጃን ማምጣት አልተቻለም።");
+    } finally {
+      setLoadingDeposits(false);
     }
-  }, [token, loadWithdrawals]);
+  }, [token]);
 
-  function login(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const loadWithdrawals = useCallback(async () => {
+    if (!token) return;
 
-    const value = tokenInput.trim();
+    setLoadingWithdrawals(true);
 
-    if (!value) {
+    try {
+      const response = await customFetch<{
+        withdrawals: Withdrawal[];
+      }>("/api/admin/wallet/withdrawals", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+        responseType: "json",
+      });
+
+      setWithdrawals(response.withdrawals ?? []);
+    } catch (err) {
+      console.error(err);
+      setError("Wallet Withdrawals መረጃን ማምጣት አልተቻለም።");
+    } finally {
+      setLoadingWithdrawals(false);
+    }
+  }, [token]);
+
+  const refreshAll = useCallback(async () => {
+    setError("");
+    setSuccess("");
+
+    await Promise.all([loadDeposits(), loadWithdrawals()]);
+  }, [loadDeposits, loadWithdrawals]);
+
+  useEffect(() => {
+    if (!loggedIn || !token) return;
+
+    refreshAll();
+  }, [loggedIn, token, refreshAll]);
+
+  const login = () => {
+    if (!token.trim()) {
       setError("Admin Token ያስገቡ።");
       return;
     }
 
-    window.sessionStorage.setItem(TOKEN_KEY, value);
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, token.trim());
 
-    setToken(value);
-    setTokenInput("");
+    setToken(token.trim());
+    setLoggedIn(true);
     setError("");
-    setMessage("");
-  }
+  };
 
-  function logout() {
-    window.sessionStorage.removeItem(TOKEN_KEY);
+  const logout = () => {
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
 
     setToken("");
+    setLoggedIn(false);
+    setDeposits([]);
     setWithdrawals([]);
+    setSuccess("");
     setError("");
-    setMessage("");
-  }
+  };
 
-  async function performAction(
-    withdrawalId: number,
-    action: "approve" | "reject" | "paid",
-  ) {
-    let payoutReference: string | undefined;
-    let adminNote: string | undefined;
+  const approveDeposit = async (deposit: Deposit) => {
+    const confirmed = window.confirm(
+      `ይህን ${formatAmount(deposit.amountEtb)} Deposit Approve ማድረግ ይፈልጋሉ?`
+    );
 
-    if (action === "paid") {
-      const value = window.prompt(
-        "የTelebirr ክፍያ Transaction Reference ያስገቡ:",
-      );
+    if (!confirmed) return;
 
-      if (value === null) {
-        return;
-      }
-
-      payoutReference = value.trim();
-
-      if (!payoutReference) {
-        setError("Payout Reference ያስፈልጋል።");
-        return;
-      }
-
-      if (payoutReference.length > 120) {
-        setError(
-          "Payout Reference ከ120 ፊደላት መብለጥ የለበትም።",
-        );
-        return;
-      }
-    }
-
-    if (action === "reject") {
-      const value = window.prompt(
-        "የመሰረዝ ምክንያት ያስገቡ (አማራጭ):",
-      );
-
-      if (value !== null) {
-        adminNote = value.trim() || undefined;
-      }
-    }
-
-    setActingId(withdrawalId);
+    setActionId(`deposit-approve-${deposit.id}`);
     setError("");
-    setMessage("");
+    setSuccess("");
 
     try {
-      const body =
-        action === "paid"
-          ? {
-              payoutReference,
-              adminNote,
-            }
-          : action === "reject"
-            ? {
-                adminNote,
-              }
-            : undefined;
-
       await customFetch(
-        `/api/admin/wallet/withdrawals/${withdrawalId}/${action}`,
+        `/api/admin/wallet/deposits/${deposit.id}/approve`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          ...(body
-            ? {
-                body: JSON.stringify(body),
-              }
-            : {}),
+          body: JSON.stringify({}),
           responseType: "json",
-        },
+        }
       );
 
-      if (action === "approve") {
-        setMessage(
-          "የWithdrawal ጥያቄው ተፈቅዷል።",
-        );
-      } else if (action === "reject") {
-        setMessage(
-          "የWithdrawal ጥያቄው ተሰርዟል። ገንዘቡም ወደ Wallet ተመልሷል።",
-        );
-      } else {
-        setMessage(
-          "ክፍያው እንደተፈጸመ ተመዝግቧል።",
-        );
-      }
+      setSuccess(
+        `${formatAmount(deposit.amountEtb)} Deposit Approved ሆኗል። Wallet ላይ ተጨምሯል።`
+      );
 
-      await loadWithdrawals();
+      await refreshAll();
     } catch (err) {
-      setError(getErrorMessage(err));
+      console.error(err);
+      setError("Deposit Approve ማድረግ አልተቻለም።");
     } finally {
-      setActingId(null);
+      setActionId(null);
     }
-  }
+  };
 
-  if (!token) {
+  const rejectDeposit = async (deposit: Deposit) => {
+    const reason = window.prompt(
+      "Deposit ለምን Reject እንደተደረገ ምክንያት ያስገቡ።"
+    );
+
+    if (reason === null) return;
+
+    setActionId(`deposit-reject-${deposit.id}`);
+    setError("");
+    setSuccess("");
+
+    try {
+      await customFetch(
+        `/api/admin/wallet/deposits/${deposit.id}/reject`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            adminNote: reason.trim() || "Rejected by admin",
+          }),
+          responseType: "json",
+        }
+      );
+
+      setSuccess("Deposit Rejected ሆኗል።");
+
+      await refreshAll();
+    } catch (err) {
+      console.error(err);
+      setError("Deposit Reject ማድረግ አልተቻለም።");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const approveWithdrawal = async (withdrawal: Withdrawal) => {
+    const confirmed = window.confirm(
+      `ይህን ${formatAmount(
+        withdrawal.amountEtb
+      )} Withdrawal Approve ማድረግ ይፈልጋሉ?`
+    );
+
+    if (!confirmed) return;
+
+    setActionId(`withdrawal-approve-${withdrawal.id}`);
+    setError("");
+    setSuccess("");
+
+    try {
+      await customFetch(
+        `/api/admin/wallet/withdrawals/${withdrawal.id}/approve`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+          responseType: "json",
+        }
+      );
+
+      setSuccess("Withdrawal Approved ሆኗል።");
+
+      await refreshAll();
+    } catch (err) {
+      console.error(err);
+      setError("Withdrawal Approve ማድረግ አልተቻለም።");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const rejectWithdrawal = async (withdrawal: Withdrawal) => {
+    const reason = window.prompt(
+      "Withdrawal ለምን Reject እንደተደረገ ምክንያት ያስገቡ።"
+    );
+
+    if (reason === null) return;
+
+    setActionId(`withdrawal-reject-${withdrawal.id}`);
+    setError("");
+    setSuccess("");
+
+    try {
+      await customFetch(
+        `/api/admin/wallet/withdrawals/${withdrawal.id}/reject`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            adminNote: reason.trim() || "Rejected by admin",
+          }),
+          responseType: "json",
+        }
+      );
+
+      setSuccess("Withdrawal Rejected ሆኗል።");
+
+      await refreshAll();
+    } catch (err) {
+      console.error(err);
+      setError("Withdrawal Reject ማድረግ አልተቻለም።");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const markWithdrawalPaid = async (withdrawal: Withdrawal) => {
+    const payoutReference = window.prompt(
+      "Telebirr / payout transaction reference ያስገቡ።"
+    );
+
+    if (payoutReference === null) return;
+
+    if (!payoutReference.trim()) {
+      setError("Payout reference ያስገቡ።");
+      return;
+    }
+
+    setActionId(`withdrawal-paid-${withdrawal.id}`);
+    setError("");
+    setSuccess("");
+
+    try {
+      await customFetch(
+        `/api/admin/wallet/withdrawals/${withdrawal.id}/paid`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            payoutReference: payoutReference.trim(),
+          }),
+          responseType: "json",
+        }
+      );
+
+      setSuccess("Withdrawal Paid ተብሎ ተመዝግቧል።");
+
+      await refreshAll();
+    } catch (err) {
+      console.error(err);
+      setError("Withdrawal Paid ማድረግ አልተቻለም።");
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  if (!loggedIn) {
     return (
-      <main className="min-h-screen bg-background px-4 py-8 text-foreground">
-        <div className="mx-auto max-w-md">
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-lg">
-            <h1 className="mb-2 text-2xl font-bold">
-              FPL Signal Admin
-            </h1>
+      <main className="min-h-screen bg-[#07111f] text-white flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
 
-            <p className="mb-6 text-sm text-muted-foreground">
-              Admin Token በማስገባት የWallet Withdrawal
-              አስተዳደርን ይክፈቱ።
-            </p>
-
-            <form
-              onSubmit={login}
-              className="space-y-4"
-            >
-              <input
-                type="password"
-                value={tokenInput}
-                onChange={(event) =>
-                  setTokenInput(event.target.value)
-                }
-                placeholder="Admin Token"
-                autoComplete="current-password"
-                className="w-full rounded-xl border border-border bg-background px-4 py-3 outline-none focus:ring-2 focus:ring-primary"
-              />
-
-              {error ? (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                  {error}
-                </div>
-              ) : null}
-
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground"
-              >
-                Admin ግባ
-              </button>
-            </form>
+            <div>
+              <h1 className="text-xl font-bold">FPL Signal Admin</h1>
+              <p className="text-sm text-white/50">Admin access</p>
+            </div>
           </div>
+
+          <label className="mb-2 block text-sm text-white/70">
+            Admin Token
+          </label>
+
+          <input
+            type="password"
+            value={token}
+            onChange={(event) => setToken(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                login();
+              }
+            }}
+            placeholder="Enter admin token"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-white/30"
+          />
+
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={login}
+            className="mt-5 w-full rounded-xl bg-white px-4 py-3 font-semibold text-black transition hover:bg-white/90"
+          >
+            Login
+          </button>
         </div>
       </main>
     );
   }
 
-  const pendingCount = withdrawals.filter(
-    (item) => item.status === "pending",
+  const pendingDeposits = deposits.filter(
+    (deposit) => deposit.status === "pending"
   ).length;
 
-  const approvedCount = withdrawals.filter(
-    (item) => item.status === "approved",
+  const approvedDeposits = deposits.filter(
+    (deposit) => deposit.status === "approved"
   ).length;
 
-  const paidCount = withdrawals.filter(
-    (item) => item.status === "paid",
+  const rejectedDeposits = deposits.filter(
+    (deposit) => deposit.status === "rejected"
   ).length;
 
-  const rejectedCount = withdrawals.filter(
-    (item) => item.status === "rejected",
+  const pendingWithdrawals = withdrawals.filter(
+    (withdrawal) => withdrawal.status === "pending"
+  ).length;
+
+  const approvedWithdrawals = withdrawals.filter(
+    (withdrawal) => withdrawal.status === "approved"
+  ).length;
+
+  const paidWithdrawals = withdrawals.filter(
+    (withdrawal) => withdrawal.status === "paid"
+  ).length;
+
+  const rejectedWithdrawals = withdrawals.filter(
+    (withdrawal) => withdrawal.status === "rejected"
   ).length;
 
   return (
-    <main className="min-h-screen bg-background px-3 py-5 text-foreground sm:px-6">
-      <div className="mx-auto max-w-5xl">
-        <header className="mb-5 flex items-center justify-between gap-3">
+    <main className="min-h-screen bg-[#07111f] text-white">
+      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">
-              FPL Signal Admin
-            </h1>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
 
-            <p className="text-sm text-muted-foreground">
-              Wallet Withdrawal Management
-            </p>
+              <div>
+                <h1 className="text-2xl font-bold">FPL Signal Admin</h1>
+                <p className="text-sm text-white/50">
+                  Wallet & Competition Administration
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2">
             <button
-              type="button"
-              onClick={() => void loadWithdrawals()}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50"
+              onClick={refreshAll}
+              disabled={loadingDeposits || loadingWithdrawals}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium hover:bg-white/[0.08] disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-4 w-4 ${
-                  loading ? "animate-spin" : ""
+                  loadingDeposits || loadingWithdrawals
+                    ? "animate-spin"
+                    : ""
                 }`}
               />
               Refresh
             </button>
 
             <button
-              type="button"
               onClick={logout}
-              className="inline-flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium hover:bg-white/[0.08]"
             >
               <LogOut className="h-4 w-4" />
               ውጣ
@@ -391,305 +519,328 @@ export default function AdminPage() {
           </div>
         </header>
 
-        {message ? (
-          <div className="mb-4 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-300">
-            {message}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+        {error && (
+          <div className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {error}
           </div>
-        ) : null}
+        )}
 
-        <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="text-sm text-muted-foreground">
-              Pending
+        {success && (
+          <div className="mb-5 rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-300">
+            {success}
+          </div>
+        )}
+
+        {/* WALLET DEPOSITS */}
+        <section className="mb-8">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">Wallet Deposits</h2>
+              <p className="text-sm text-white/50">
+                Manual Telebirr deposits — Approve or Reject
+              </p>
             </div>
 
-            <div className="mt-1 text-2xl font-bold">
-              {pendingCount}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-yellow-300/70">Pending</div>
+                <div className="text-lg font-bold text-yellow-300">
+                  {pendingDeposits}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-green-300/70">Approved</div>
+                <div className="text-lg font-bold text-green-300">
+                  {approvedDeposits}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-red-300/70">Rejected</div>
+                <div className="text-lg font-bold text-red-300">
+                  {rejectedDeposits}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="text-sm text-muted-foreground">
-              Approved
-            </div>
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+            {loadingDeposits ? (
+              <div className="flex items-center justify-center gap-2 p-10 text-white/50">
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                Deposits በመጫን ላይ...
+              </div>
+            ) : deposits.length === 0 ? (
+              <div className="p-10 text-center text-white/40">
+                Wallet Deposits የሉም።
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[950px] text-sm">
+                  <thead className="border-b border-white/10 bg-white/[0.03]">
+                    <tr className="text-left text-white/50">
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Telegram User</th>
+                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Transaction Ref</th>
+                      <th className="px-4 py-3">Created</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
 
-            <div className="mt-1 text-2xl font-bold">
-              {approvedCount}
-            </div>
-          </div>
+                  <tbody>
+                    {deposits.map((deposit) => (
+                      <tr
+                        key={deposit.id}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
+                              deposit.status
+                            )}`}
+                          >
+                            {deposit.status ?? "-"}
+                          </span>
+                        </td>
 
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="text-sm text-muted-foreground">
-              Paid
-            </div>
+                        <td className="px-4 py-4">
+                          <div className="font-medium">
+                            {deposit.telegramUserId ?? "-"}
+                          </div>
+                        </td>
 
-            <div className="mt-1 text-2xl font-bold">
-              {paidCount}
-            </div>
-          </div>
+                        <td className="px-4 py-4">
+                          {methodLabel(deposit.method)}
+                        </td>
 
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="text-sm text-muted-foreground">
-              Rejected
-            </div>
+                        <td className="px-4 py-4 font-bold">
+                          {formatAmount(deposit.amountEtb)}
+                        </td>
 
-            <div className="mt-1 text-2xl font-bold">
-              {rejectedCount}
-            </div>
+                        <td className="px-4 py-4">
+                          <span className="break-all text-white/70">
+                            {deposit.transactionReference ?? "-"}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4 whitespace-nowrap text-white/60">
+                          {formatDate(deposit.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {deposit.status === "pending" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => approveDeposit(deposit)}
+                                disabled={actionId !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Approve
+                              </button>
+
+                              <button
+                                onClick={() => rejectDeposit(deposit)}
+                                disabled={actionId !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-white/30">
+                              No action
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </section>
 
-        {loading && withdrawals.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground">
-            <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin" />
-            Withdrawal መረጃ እየተጫነ ነው...
+        {/* WALLET WITHDRAWALS */}
+        <section>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">
+                Wallet Withdrawal Management
+              </h2>
+              <p className="text-sm text-white/50">
+                Review, approve, reject and mark withdrawals as paid.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-yellow-300/70">Pending</div>
+                <div className="text-lg font-bold text-yellow-300">
+                  {pendingWithdrawals}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-blue-300/70">Approved</div>
+                <div className="text-lg font-bold text-blue-300">
+                  {approvedWithdrawals}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-green-300/70">Paid</div>
+                <div className="text-lg font-bold text-green-300">
+                  {paidWithdrawals}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-red-300/70">Rejected</div>
+                <div className="text-lg font-bold text-red-300">
+                  {rejectedWithdrawals}
+                </div>
+              </div>
+            </div>
           </div>
-        ) : withdrawals.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-8 text-center text-muted-foreground">
-            ምንም Withdrawal ጥያቄ የለም።
+
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+            {loadingWithdrawals ? (
+              <div className="flex items-center justify-center gap-2 p-10 text-white/50">
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                Withdrawals በመጫን ላይ...
+              </div>
+            ) : withdrawals.length === 0 ? (
+              <div className="p-10 text-center text-white/40">
+                Withdrawals የሉም።
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[950px] text-sm">
+                  <thead className="border-b border-white/10 bg-white/[0.03]">
+                    <tr className="text-left text-white/50">
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Telegram User</th>
+                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-3">Amount</th>
+                      <th className="px-4 py-3">Payout Ref</th>
+                      <th className="px-4 py-3">Created</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {withdrawals.map((withdrawal) => (
+                      <tr
+                        key={withdrawal.id}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
+                              withdrawal.status
+                            )}`}
+                          >
+                            {withdrawal.status ?? "-"}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {withdrawal.telegramUserId ?? "-"}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {methodLabel(withdrawal.method)}
+                        </td>
+
+                        <td className="px-4 py-4 font-bold">
+                          {formatAmount(withdrawal.amountEtb)}
+                        </td>
+
+                        <td className="px-4 py-4 text-white/60">
+                          {withdrawal.payoutReference ?? "-"}
+                        </td>
+
+                        <td className="px-4 py-4 whitespace-nowrap text-white/60">
+                          {formatDate(withdrawal.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {withdrawal.status === "pending" && (
+                              <>
+                                <button
+                                  onClick={() =>
+                                    approveWithdrawal(withdrawal)
+                                  }
+                                  disabled={actionId !== null}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/25 disabled:opacity-50"
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Approve
+                                </button>
+
+                                <button
+                                  onClick={() =>
+                                    rejectWithdrawal(withdrawal)
+                                  }
+                                  disabled={actionId !== null}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Reject
+                                </button>
+                              </>
+                            )}
+
+                            {withdrawal.status === "approved" && (
+                              <button
+                                onClick={() =>
+                                  markWithdrawalPaid(withdrawal)
+                                }
+                                disabled={actionId !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Mark Paid
+                              </button>
+                            )}
+
+                            {withdrawal.status === "paid" && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-green-300">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Paid
+                              </span>
+                            )}
+
+                            {withdrawal.status === "rejected" && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-red-300">
+                                <XCircle className="h-4 w-4" />
+                                Rejected
+                              </span>
+                            )}
+
+                            {!withdrawal.status && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-white/40">
+                                <Clock3 className="h-4 w-4" />
+                                Unknown
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="space-y-3">
-            {withdrawals.map((withdrawal) => {
-              const busy =
-                actingId === withdrawal.id;
-
-              return (
-                <article
-                  key={withdrawal.id}
-                  className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-lg font-bold">
-                        {withdrawal.amountEtb.toLocaleString()} ETB
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Withdrawal #{withdrawal.id}
-                      </div>
-                    </div>
-
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(
-                        withdrawal.status,
-                      )}`}
-                    >
-                      {statusLabel[withdrawal.status]}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 text-sm md:grid-cols-2">
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Telegram User ID
-                      </div>
-
-                      <div className="font-medium">
-                        {withdrawal.telegramUserId}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Method
-                      </div>
-
-                      <div className="font-medium">
-                        {withdrawal.method}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Telebirr
-                      </div>
-
-                      <div className="break-all font-medium">
-                        {withdrawal.destination || "—"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Created
-                      </div>
-
-                      <div className="font-medium">
-                        {formatDate(withdrawal.createdAt)}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs text-muted-foreground">
-                        Updated
-                      </div>
-
-                      <div className="font-medium">
-                        {formatDate(withdrawal.updatedAt)}
-                      </div>
-                    </div>
-
-                    {withdrawal.approvedAt ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Approved
-                        </div>
-
-                        <div className="font-medium">
-                          {formatDate(withdrawal.approvedAt)}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {withdrawal.rejectedAt ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Rejected
-                        </div>
-
-                        <div className="font-medium">
-                          {formatDate(withdrawal.rejectedAt)}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {withdrawal.paidAt ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Paid
-                        </div>
-
-                        <div className="font-medium">
-                          {formatDate(withdrawal.paidAt)}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {withdrawal.payoutReference ? (
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Payout Reference
-                        </div>
-
-                        <div className="break-all font-medium">
-                          {withdrawal.payoutReference}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {withdrawal.adminNote ? (
-                      <div className="md:col-span-2">
-                        <div className="text-xs text-muted-foreground">
-                          Admin Note
-                        </div>
-
-                        <div className="font-medium">
-                          {withdrawal.adminNote}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {withdrawal.status === "pending" ? (
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void performAction(
-                            withdrawal.id,
-                            "approve",
-                          )
-                        }
-                        className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busy ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-
-                        Approve
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void performAction(
-                            withdrawal.id,
-                            "reject",
-                          )
-                        }
-                        className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-semibold text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busy ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-
-                        Reject
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {withdrawal.status === "approved" ? (
-                    <div className="mt-5">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void performAction(
-                            withdrawal.id,
-                            "paid",
-                          )
-                        }
-                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {busy ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Check className="h-4 w-4" />
-                        )}
-
-                        ክፍያ ተፈጽሟል
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {withdrawal.status === "paid" ? (
-                    <div className="mt-4 inline-flex items-center gap-2 text-sm text-green-300">
-                      <Check className="h-4 w-4" />
-                      ክፍያው ተመዝግቧል
-                    </div>
-                  ) : null}
-
-                  {withdrawal.status === "rejected" ? (
-                    <div className="mt-4 inline-flex items-center gap-2 text-sm text-red-300">
-                      <X className="h-4 w-4" />
-                      ጥያቄው ተሰርዟል
-                    </div>
-                  ) : null}
-
-                  {withdrawal.status === "pending" ? (
-                    <div className="mt-4 inline-flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock3 className="h-4 w-4" />
-                      Admin ማጽደቅ ይጠብቃል
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
+        </section>
       </div>
     </main>
   );
