@@ -1972,4 +1972,910 @@
 ‎
 ‎    if (
 ‎      !Number.isSafeInteger(parsedAmount) ||
-‎      parsedAmount 
+‎      parsedAmount ‎<= 0
+‎    ) {
+‎      setError(
+‎        'ትክክለኛ የገንዘብ መጠን ያስገቡ።',
+‎      );
+‎      return;
+‎    }
+‎
+‎    if (!transactionReference.trim()) {
+‎      setError(
+‎        'የTelebirr SMS መልእክቱን ሙሉውን ያስገቡ።',
+‎      );
+‎      return;
+‎    }
+‎
+‎    setSubmitting(true);
+‎    setError(null);
+‎    setSuccess(null);
+‎
+‎    try {
+‎      await customFetch(
+‎        '/api/mini-app/wallet/deposit/telebirr',
+‎        {
+‎          method: 'POST',
+‎          responseType: 'json',
+‎          body: JSON.stringify({
+‎            amountEtb: parsedAmount,
+‎            transactionReference:
+‎              transactionReference.trim(),
+‎          }),
+‎          headers: {
+‎            'Content-Type': 'application/json',
+‎          },
+‎        },
+‎      );
+‎
+‎      setAmount('');
+‎      setTransactionReference('');
+‎
+‎      setSuccess(
+‎        'የገንዘብ ጥያቄዎ ተልኳል። ከተረጋገጠ በኋላ Wallet ዎ ይሞላል።',
+‎      );
+‎
+‎      await loadWallet();
+‎    } catch (err) {
+‎      setError(
+‎        extractApiErrorMessage(err) ??
+‎          'Deposit ማስገባት አልተሳካም።',
+‎      );
+‎    } finally {
+‎      setSubmitting(false);
+‎    }
+‎  };
+‎
+‎  const submitWithdrawal = async (
+‎    event: FormEvent<HTMLFormElement>,
+‎  ) => {
+‎    event.preventDefault();
+‎
+‎    const parsedAmount =
+‎      Number(withdrawAmount);
+‎
+‎    if (
+‎      !Number.isSafeInteger(parsedAmount) ||
+‎      parsedAmount <= 0
+‎    ) {
+‎      setError(
+‎        'ትክክለኛ የሚወጣ የገንዘብ መጠን ያስገቡ።',
+‎      );
+‎      return;
+‎    }
+‎
+‎    if (
+‎      balance !== null &&
+‎      parsedAmount > balance
+‎    ) {
+‎      setError(
+‎        'በWallet ውስጥ ያለው ቀሪ ሂሳብ በቂ አይደለም።',
+‎      );
+‎      return;
+‎    }
+‎
+‎    if (!withdrawDestination.trim()) {
+‎      setError(
+‎        'የሚቀበለውን Telebirr ቁጥር ያስገቡ።',
+‎      );
+‎      return;
+‎    }
+‎
+‎    setWithdrawing(true);
+‎    setError(null);
+‎    setSuccess(null);
+‎
+‎    try {
+‎      await customFetch(
+‎        '/api/mini-app/wallet/withdraw',
+‎        {
+‎          method: 'POST',
+‎          responseType: 'json',
+‎          body: JSON.stringify({
+‎            amountEtb: parsedAmount,
+‎            destination:
+‎              withdrawDestination.trim(),
+‎          }),
+‎          headers: {
+‎            'Content-Type':
+‎              'application/json',
+‎          },
+‎        },
+‎      );
+‎
+‎      setWithdrawAmount('');
+‎      setWithdrawDestination('');
+‎
+‎      setSuccess(
+‎        'የWithdrawal ጥያቄዎ ተልኳል። አስተዳዳሪው ካጸደቀ በኋላ ገንዘቡ ወደ Telebirr ይላካል።',
+‎      );
+‎
+‎      await loadWallet();
+‎    } catch (err) {
+‎      setError(
+‎        extractApiErrorMessage(err) ??
+‎          'Withdrawal ማስገባት አልተሳካም።',
+‎      );
+‎    } finally {
+‎      setWithdrawing(false);
+‎    }
+‎  };
+‎
+‎  if (loading) {
+‎    return <LoadingState />;
+‎  }
+‎
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="Wallet"
+‎        title="የእኔ Wallet"
+‎        note="ገንዘብዎን ያስተዳድሩ።"
+‎        action={
+‎          <button
+‎            type="button"
+‎            className="icon-button icon-button-filled"
+‎            onClick={() =>
+‎              void loadWallet()
+‎            }
+‎            disabled={loading}
+‎            aria-label="Wallet
+‎አድስ"
+‎          >
+‎            <RefreshCw className="h-4 w-4" />
+‎          </button>
+‎        }
+‎      />
+‎
+‎      {error && (
+‎        <div className="notice notice-gold">
+‎          <CircleAlert className="h-4 w-4 shrink-0" />
+‎          <span>{error}</span>
+‎        </div>
+‎      )}
+‎
+‎      {success && (
+‎        <div className="notice">
+‎          <Check className="h-4 w-4 shrink-0" />
+‎          <span>{success}</span>
+‎        </div>
+‎      )}
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">ቀሪ ሂሳብ</p>
+‎            <h2>{balance ?? 0} ETB</h2>
+‎          </div>
+‎
+‎          <WalletCards className="heading-icon" />
+‎        </div>
+‎
+‎        <p className="muted-copy">
+‎          Wallet ዎን በመጠቀም የWeekly Challenge
+‎          መግቢያ ክፍያ ይክፈሉ።
+‎        </p>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">Deposit</p>
+‎            <h2>
+‎              በTelebirr ገንዘብ ያስገቡ
+‎            </h2>
+‎          </div>
+‎
+‎          <Activity className="heading-icon" />
+‎        </div>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            <strong>
+‎              📱 FPL Signal Telebirr:
+‎              0940504900
+‎            </strong>
+‎            <br />
+‎            ወደዚህ ቁጥር ገንዘብ ይላኩ።
+‎            <br />
+‎            ከላኩ በኋላ ከTelebirr የደረስዎትን SMS
+‎            መልእክት ሙሉውን Copy አድርገው
+‎            ከታች ያስገቡ።
+‎          </span>
+‎        </div>
+‎
+‎        <form
+‎          onSubmit={submitDeposit}
+‎          className="form-stack"
+‎        >
+‎          <label>
+‎            <span>መጠን (ETB)</span>
+‎
+‎            <input
+‎              type="number"
+‎              min="1"
+‎              step="1"
+‎              value={amount}
+‎              onChange={(event) =>
+‎                setAmount(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="ለምሳሌ 100"
+‎              inputMode="numeric"
+‎            />
+‎          </label>
+‎
+‎          <label>
+‎            <span>
+‎              የTelebirr SMS መልእክት
+‎            </span>
+‎
+‎            <textarea
+‎              value={transactionReference}
+‎              onChange={(event) =>
+‎                setTransactionReference(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="የTelebirr SMS መልእክቱን ሙሉውን Paste ያድርጉ"
+‎              rows={6}
+‎            />
+‎          </label>
+‎
+‎          <button
+‎            type="submit"
+‎            className="button button-primary button-large"
+‎            disabled={submitting}
+‎          >
+‎            {submitting ? (
+‎              <RefreshCw className="h-4 w-4 animate-spin" />
+‎            ) : (
+‎              <WalletCards className="h-4 w-4" />
+‎            )}
+‎
+‎            {submitting
+‎              ? 'በመላክ ላይ…'
+‎              : 'Deposit አስገባ'}
+‎          </button>
+‎        </form>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            ገንዘቡን ከላኩ በኋላ የTelebirr SMS
+‎            መልእክቱን ሙሉውን ያስገቡ።
+‎            አስተዳዳሪ ክፍያውን ካረጋገጠ በኋላ
+‎            Wallet ዎ ይሞላል።
+‎          </span>
+‎        </div>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Withdrawal
+‎            </p>
+‎            <h2>
+‎              ከWallet ገንዘብ ያውጡ
+‎            </h2>
+‎          </div>
+‎
+‎          <ArrowRight className="heading-icon" />
+‎        </div>
+‎
+‎        <form
+‎          onSubmit={submitWithdrawal}
+‎          className="form-stack"
+‎        >
+‎          <label>
+‎            <span>
+‎              የሚወጣ መጠን (ETB)
+‎            </span>
+‎
+‎            <input
+‎              type="number"
+‎              min="1"
+‎              step="1"
+‎              value={withdrawAmount}
+‎              onChange={(event) =>
+‎                setWithdrawAmount(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="ለምሳሌ 100"
+‎              inputMode="numeric"
+‎            />
+‎          </label>
+‎
+‎          <label>
+‎            <span>
+‎              የሚቀበለው Telebirr ቁጥር
+‎            </span>
+‎
+‎            <input
+‎              type="tel"
+‎              value={withdrawDestination}
+‎              onChange={(event) =>
+‎                setWithdrawDestination(
+‎                  event.target.value,
+‎                )
+‎              }
+‎
+‎አድስ"
+‎          >
+‎            <RefreshCw className="h-4 w-4" />
+‎          </button>
+‎        }
+‎      />
+‎
+‎      {error && (
+‎        <div className="notice notice-gold">
+‎          <CircleAlert className="h-4 w-4 shrink-0" />
+‎          <span>{error}</span>
+‎        </div>
+‎      )}
+‎
+‎      {success && (
+‎        <div className="notice">
+‎          <Check className="h-4 w-4 shrink-0" />
+‎          <span>{success}</span>
+‎        </div>
+‎      )}
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">ቀሪ ሂሳብ</p>
+‎            <h2>{balance ?? 0} ETB</h2>
+‎          </div>
+‎
+‎          <WalletCards className="heading-icon" />
+‎        </div>
+‎
+‎        <p className="muted-copy">
+‎          Wallet ዎን በመጠቀም የWeekly Challenge
+‎          መግቢያ ክፍያ ይክፈሉ።
+‎        </p>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">Deposit</p>
+‎            <h2>
+‎              በTelebirr ገንዘብ ያስገቡ
+‎            </h2>
+‎          </div>
+‎
+‎          <Activity className="heading-icon" />
+‎        </div>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            <strong>
+‎              📱 FPL Signal Telebirr:
+‎              0940504900
+‎            </strong>
+‎            <br />
+‎            ወደዚህ ቁጥር ገንዘብ ይላኩ።
+‎            <br />
+‎            ከላኩ በኋላ ከTelebirr የደረስዎትን SMS
+‎            መልእክት ሙሉውን Copy አድርገው
+‎            ከታች ያስገቡ።
+‎          </span>
+‎        </div>
+‎
+‎        <form
+‎          onSubmit={submitDeposit}
+‎          className="form-stack"
+‎        >
+‎          <label>
+‎            <span>መጠን (ETB)</span>
+‎
+‎            <input
+‎              type="number"
+‎              min="1"
+‎              step="1"
+‎              value={amount}
+‎              onChange={(event) =>
+‎                setAmount(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="ለምሳሌ 100"
+‎              inputMode="numeric"
+‎            />
+‎          </label>
+‎
+‎          <label>
+‎            <span>
+‎              የTelebirr SMS መልእክት
+‎            </span>
+‎
+‎            <textarea
+‎              value={transactionReference}
+‎              onChange={(event) =>
+‎                setTransactionReference(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="የTelebirr SMS መልእክቱን ሙሉውን Paste ያድርጉ"
+‎              rows={6}
+‎            />
+‎          </label>
+‎
+‎          <button
+‎            type="submit"
+‎            className="button button-primary button-large"
+‎            disabled={submitting}
+‎          >
+‎            {submitting ? (
+‎              <RefreshCw className="h-4 w-4 animate-spin" />
+‎            ) : (
+‎              <WalletCards className="h-4 w-4" />
+‎            )}
+‎
+‎            {submitting
+‎              ? 'በመላክ ላይ…'
+‎              : 'Deposit አስገባ'}
+‎          </button>
+‎        </form>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            ገንዘቡን ከላኩ በኋላ የTelebirr SMS
+‎            መልእክቱን ሙሉውን ያስገቡ።
+‎            አስተዳዳሪ ክፍያውን ካረጋገጠ በኋላ
+‎            Wallet ዎ ይሞላል።
+‎          </span>
+‎        </div>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Withdrawal
+‎            </p>
+‎            <h2>
+‎              ከWallet ገንዘብ ያውጡ
+‎            </h2>
+‎          </div>
+‎
+‎          <ArrowRight className="heading-icon" />
+‎        </div>
+‎
+‎        <form
+‎          onSubmit={submitWithdrawal}
+‎          className="form-stack"
+‎        >
+‎          <label>
+‎            <span>
+‎              የሚወጣ መጠን (ETB)
+‎            </span>
+‎
+‎            <input
+‎              type="number"
+‎              min="1"
+‎              step="1"
+‎              value={withdrawAmount}
+‎              onChange={(event) =>
+‎                setWithdrawAmount(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="ለምሳሌ 100"
+‎              inputMode="numeric"
+‎            />
+‎          </label>
+‎
+‎          <label>
+‎            <span>
+‎              የሚቀበለው Telebirr ቁጥር
+‎            </span>
+‎
+‎            <input
+‎              type="tel"
+‎              value={withdrawDestination}
+‎              onChange={(event) =>
+‎                setWithdrawDestination(
+‎                  event.target.value,
+‎                )
+‎              }
+‎placeholder="የTelebirr SMS መልእክቱን ሙሉውን Paste ያድርጉ"
+‎              rows={6}
+‎            />
+‎          </label>
+‎
+‎          <button
+‎            type="submit"
+‎            className="button button-primary button-large"
+‎            disabled={submitting}
+‎          >
+‎            {submitting ? (
+‎              <RefreshCw className="h-4 w-4 animate-spin" />
+‎            ) : (
+‎              <WalletCards className="h-4 w-4" />
+‎            )}
+‎
+‎            {submitting
+‎              ? 'በመላክ ላይ…'
+‎              : 'Deposit አስገባ'}
+‎          </button>
+‎        </form>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            ገንዘቡን ከላኩ በኋላ የTelebirr SMS
+‎            መልእክቱን ሙሉውን ያስገቡ።
+‎            አስተዳዳሪ ክፍያውን ካረጋገጠ በኋላ
+‎            Wallet ዎ ይሞላል።
+‎          </span>
+‎        </div>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Withdrawal
+‎            </p>
+‎            <h2>
+‎              ከWallet ገንዘብ ያውጡ
+‎            </h2>
+‎          </div>
+‎
+‎          <ArrowRight className="heading-icon" />
+‎        </div>
+‎
+‎        <form
+‎          onSubmit={submitWithdrawal}
+‎          className="form-stack"
+‎        >
+‎          <label>
+‎            <span>
+‎              የሚወጣ መጠን (ETB)
+‎            </span>
+‎
+‎            <input
+‎              type="number"
+‎              min="1"
+‎              step="1"
+‎              value={withdrawAmount}
+‎              onChange={(event) =>
+‎                setWithdrawAmount(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="ለምሳሌ 100"
+‎              inputMode="numeric"
+‎            />
+‎          </label>
+‎
+‎          <label>
+‎            <span>
+‎              የሚቀበለው Telebirr ቁጥር
+‎            </span>
+‎
+‎            <input
+‎              type="tel"
+‎              value={withdrawDestination}
+‎              onChange={(event) =>
+‎                setWithdrawDestination(
+‎                  event.target.value,
+‎                )
+‎              }
+‎              placeholder="09xxxxxxxx"
+‎              inputMode="tel"
+‎              autoComplete="tel"
+‎            />
+‎          </label>
+‎
+‎          <button
+‎            type="submit"
+‎            className="button button-primary button-large"
+‎            disabled={withdrawing}
+‎          >
+‎            {withdrawing ? (
+‎              <RefreshCw className="h-4 w-4 animate-spin" />
+‎            ) : (
+‎              <ArrowRight className="h-4 w-4" />
+‎            )}
+‎
+‎            {withdrawing
+‎              ? 'በመላክ ላይ…'
+‎              : 'Withdrawal ጠይቅ'}
+‎          </button>
+‎        </form>
+‎
+‎        <div className="notice">
+‎          <Info className="h-4 w-4 shrink-0" />
+‎
+‎          <span>
+‎            Withdrawal ሲጠይቁ የተጠየቀው መጠን
+‎            ከWallet ውስጥ ወዲያውኑ ይያዛል።
+‎            ጥያቄው ከተቀበለ በኋላ አስተዳዳሪ
+‎            ወደ እርስዎ Telebirr ይልካል።
+‎            ከተከለከለ ገንዘቡ ወደ Wallet ይመለሳል።
+‎          </span>
+‎        </div>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Withdrawal History
+‎            </p>
+‎            <h2>
+‎              የገንዘብ ማውጫ ታሪክ
+‎            </h2>
+‎          </div>
+‎
+‎          <Clock3 className="heading-icon" />
+‎        </div>
+‎
+‎        {withdrawals.length ? (
+‎          <div className="player-list compact-list">
+‎            {withdrawals.map(
+‎              (withdrawal) => (
+‎                <div
+‎                  className="more-link"
+‎                  key={withdrawal.id}
+‎                >
+‎                  <ArrowRight className="h-5 w-5" />
+‎
+‎                  <span>
+‎                    <strong>
+‎                      {withdrawal.amountEtb} ETB ·
+‎                      Telebirr
+‎                    </strong>
+‎
+‎                    <small>
+‎                      {withdrawal.destination} ·{' '}
+‎                      {withdrawalStatusLabel(
+‎                        withdrawal.status,
+‎                      )}
+‎                    </small>
+‎
+‎                    {withdrawal.adminNote && (
+‎                      <small>
+‎                        {withdrawal.adminNote}
+‎                      </small>
+‎                    )}
+‎                  </span>
+‎                </div>
+‎              ),
+‎            )}
+‎          </div>
+‎        ) : (
+‎          <div className="empty-inline">
+‎            እስካሁን Withdrawal ታሪክ የለም።
+‎          </div>
+‎        )}
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Deposit History
+‎            </p>
+‎            <h2>
+‎              የገንዘብ ማስገቢያ ታሪክ
+‎            </h2>
+‎          </div>
+‎
+‎          <Clock3 className="heading-icon" />
+‎        </div>
+‎
+‎        {deposits.length ? (
+‎          <div className="player-list compact-list">
+‎            {deposits.map((deposit) => (
+‎              <div
+‎                className="more-link"
+‎                key={deposit.id}
+‎              >
+‎                <WalletCards className="h-5 w-5" />
+‎
+‎                <span>
+‎                  <strong>
+‎                    {deposit.amountEtb} ETB ·
+‎                    Telebirr
+‎                  </strong>
+‎
+‎                  <small>
+‎                    {deposit.transactionReference} ·{' '}
+‎                    {depositStatusLabel(
+‎                      deposit.status,
+‎                    )}
+‎                  </small>
+‎
+‎                  {deposit.adminNote && (
+‎                    <small>
+‎                      {deposit.adminNote}
+‎                    </small>
+‎                  )}
+‎                </span>
+‎              </div>
+‎            ))}
+‎          </div>
+‎        ) : (
+‎          <div className="empty-inline">
+‎            እስካሁን Deposit ታሪክ የለም።
+‎          </div>
+‎        )}
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">
+‎              Transactions
+‎            </p>
+‎            <h2>
+‎              የWallet እንቅስቃሴ
+‎            </h2>
+‎          </div>
+‎
+‎          <Activity className="heading-icon" />
+‎        </div>
+‎
+‎        {transactions.length ? (
+‎          <div className="player-list compact-list">
+‎            {transactions.map(
+‎              (transaction) => (
+‎                <div
+‎                  className="more-link"
+‎                  key={transaction.id}
+‎                >
+‎                  <Activity className="h-5 w-5" />
+‎
+‎                  <span>
+‎                    <strong>
+‎                      {transaction.amountEtb > 0
+‎                        ? '+'
+‎                        : ''}
+‎                      {transaction.amountEtb} ETB
+‎                    </strong>
+‎
+‎                    <small>
+‎                      {transaction.description} ·{' '}
+‎                      {transaction.balanceAfterEtb} ETB
+‎                    </small>
+‎                  </span>
+‎                </div>
+‎              ),
+‎            )}
+‎          </div>
+‎        ) : (
+‎          <div className="empty-inline">
+‎            እስካሁን የWallet እንቅስቃሴ የለም።
+‎          </div>
+‎        )}
+‎      </section>
+‎    </div>
+‎  );
+‎}
+‎export function MiniApp() {
+‎  const queryClient = useQueryClient();
+‎
+‎  const bootstrap = useGetMiniAppBootstrap({
+‎    query: {
+‎      queryKey:
+‎        getGetMiniAppBootstrapQueryKey(),
+‎      retry: 1,
+‎    },
+‎  });
+‎
+‎  const health = useHealthCheck({
+‎    query: {
+‎      queryKey: getHealthCheckQueryKey(),
+‎      staleTime: 60_000,
+‎      retry: 0,
+‎    },
+‎  });
+‎
+‎  const [location] = useLocation();
+‎
+‎  useEffect(
+‎    () => prepareTelegramApp(),
+‎    [],
+‎  );
+‎
+‎  const update = useCallback(
+‎    (next: MiniAppBootstrap) => {
+‎      queryClient.setQueryData(
+‎        getGetMiniAppBootstrapQueryKey(),
+‎        next,
+‎      );
+‎    },
+‎    [queryClient],
+‎  );
+‎
+‎  if (bootstrap.isLoading) {
+‎    return <LoadingState />;
+‎  }
+‎
+‎  if (
+‎    bootstrap.isError ||
+‎    !bootstrap.data
+‎  ) {
+‎    const error =
+‎      bootstrap.error as {
+‎        status?: number;
+‎      } | null;
+‎
+‎    return (
+‎      <ErrorState
+‎        unauthenticated={
+‎          error?.status === 401 ||
+‎          error?.status === 403
+‎        }
+‎        onRetry={() =>
+‎          void bootstrap.refetch()
+‎        }
+‎      />
+‎    );
+‎  }
+‎
+‎  const data =
+‎    bootstrap.data as MiniAppBootstrap;
+‎
+‎  const page =
+‎    location === '/challenge' ? (
+‎      <ChallengePage
+‎        data={data}
+‎        update={update}
+‎      />
+‎    ) : location === '/team' ? (
+‎      <TeamPage data={data} />
+‎    ) : location === '/leaderboard' ? (
+‎      <LeaderboardPage
+‎        data={data}
+‎        update={update}
+‎      />
+‎    ) : location === '/points' ? (
+‎      <PointsPage data={data} />
+‎    ) : location === '/signal' ? (
+‎      <SignalPage data={data} />
+‎    ) : location === '/wallet' ? (
+‎      <WalletPage />
+‎    ) : location === '/about' ? (
+‎      <AboutPage />
+‎    ) : (
+‎      <HomePage data={data} />
+‎    );
+‎
+‎  return (
+‎    <AppShell data={data}>
+‎      <div
+‎        className={cn(
+‎          'connection-strip',
+‎          health.isError &&
+‎            'connection-strip-error',
+‎        )}
+‎      >
+‎        <span className="connection-dot" />
+‎
+‎        {health.isError
+‎          ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር'
+‎          : 'የመረጃ አገልግሎት ንቁ ነው'}
+‎      </div>
+‎
+‎      {page}
+‎    </AppShell>
+‎  );
+‎}
+‎
