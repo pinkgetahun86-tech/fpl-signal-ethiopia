@@ -816,25 +816,7 @@
     setPaymentError(
       `በWallet ውስጥ ቢያንስ ${entryFeeEtb} ETB ያስፈልጋል።`,
     );
-    return;
-  }
-
-  setWalletPaymentLoading(true);
-  setPaymentError(null);
-
-  try {
-    const result = await customFetch<
-      MiniAppBootstrap & {
-        wallet: {
-          balanceEtb: number;
-          currency: string;
-        };
-        payment: {
-          method: 'wallet';
-          status: 'success';
-          amountEtb: number;
-          alreadyConfirmed: boolean;
-        };
+    
       }
     >('/api/mini-app/wallet/entry', {
       method: 'POST',
