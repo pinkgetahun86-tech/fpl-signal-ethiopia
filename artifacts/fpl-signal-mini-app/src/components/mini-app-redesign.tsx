@@ -2102,7 +2102,6 @@
 ‎  }
 ‎
 ‎  return (
-  return (
     <div className="page-stack">
       <SectionTitle
         eyebrow="Wallet"
