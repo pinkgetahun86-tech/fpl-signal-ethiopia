@@ -2510,8 +2510,7 @@
 ‎    bootstrap.isError ||
 ‎    !bootstrap.data
 ‎  ) {
-‎    
-‎        const error =
+‎     const error =
       bootstrap.error as {
         status?: number;
       } | null;
