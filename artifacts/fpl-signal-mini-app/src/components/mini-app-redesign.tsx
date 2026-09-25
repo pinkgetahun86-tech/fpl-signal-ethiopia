@@ -2510,70 +2510,70 @@
 ‎    bootstrap.isError ||
 ‎    !bootstrap.data
 ‎  ) {
-‎    const error =
-‎      bootstrap.error as {
-‎        status?: number;
-‎      } | null;
-‎
-‎    return (
-‎      <ErrorState
-‎        unauthenticated={
-‎          error?.status === 401 ||
-‎          error?.status === 403
-‎        }
-‎        onRetry={() =>
-‎          void bootstrap.refetch()
-‎        }
-‎      />
-‎    );
-‎  }
-‎
-‎  const data =
-‎    bootstrap.data as MiniAppBootstrap;
-‎
-‎  const page =
-‎    location === '/challenge' ? (
-‎      <ChallengePage
-‎        data={data}
-‎        update={update}
-‎      />
-‎    ) : location === '/team' ? (
-‎      <TeamPage data={data} />
-‎    ) : location === '/leaderboard' ? (
-‎      <LeaderboardPage
-‎        data={data}
-‎        update={update}
-‎      />
-‎    ) : location === '/points' ? (
-‎      <PointsPage data={data} />
-‎    ) : location === '/signal' ? (
-‎      <SignalPage data={data} />
-‎    ) : location === '/wallet' ? (
-‎      <WalletPage />
-‎    ) : location === '/about' ? (
-‎      <AboutPage />
-‎    ) : (
-‎      <HomePage data={data} />
-‎    );
-‎
-‎  return (
-‎    <AppShell data={data}>
-‎      <div
-‎        className={cn(
-‎          'connection-strip',
-‎          health.isError &&
-‎            'connection-strip-error',
-‎        )}
-‎      >
-‎        <span className="connection-dot" />
-‎
-‎        {health.isError
-‎          ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር'
-‎          : 'የመረጃ አገልግሎት ንቁ ነው'}
-‎      </div>
-‎
-‎      {page}
-‎    </AppShell>
-‎  );
-‎}
-‎
+‎    
+‎        const error =
+      bootstrap.error as {
+        status?: number;
+      } | null;
+
+    return (
+      <ErrorState
+        unauthenticated={
+          error?.status === 401 ||
+          error?.status === 403
+        }
+        onRetry={() =>
+          void bootstrap.refetch()
+        }
+      />
+    );
+  }
+
+  const data =
+    bootstrap.data as MiniAppBootstrap;
+
+  const page =
+    location === '/challenge' ? (
+      <ChallengePage
+        data={data}
+        update={update}
+      />
+    ) : location === '/team' ? (
+      <TeamPage data={data} />
+    ) : location === '/leaderboard' ? (
+      <LeaderboardPage
+        data={data}
+        update={update}
+      />
+    ) : location === '/points' ? (
+      <PointsPage data={data} />
+    ) : location === '/signal' ? (
+      <SignalPage data={data}
+    ) : location === '/wallet' ? (
+      <WalletPage />
+    ) : location === '/about' ? (
+      <AboutPage />
+    ) : (
+      <HomePage data={data} />
+    );
+
+  return (
+    <AppShell data={data}>
+      <div
+        className={cn(
+          'connection-strip',
+          health.isError &&
+            'connection-strip-error',
+        )}
+      >
+        <span className="connection-dot" />
+
+        {health.isError
+          ? 'የመረጃ አገልግሎት ጊዜያዊ ችግር'
+          : 'የመረጃ አገልግሎት ንቁ ነው'}
+      </div>
+
+      {page}
+    </AppShell>
+  );
+}
