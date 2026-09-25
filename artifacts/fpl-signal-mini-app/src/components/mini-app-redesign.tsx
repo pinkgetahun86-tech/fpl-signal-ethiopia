@@ -805,21 +805,54 @@
 ‎  }, [data.team.submissionStatus, update]);
 ‎
 ‎  const payWithWallet = async () => {
-‎  if (walletBalance === null || walletBalance < 100) {
-‎    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
-‎  
-‎‎  const payWithWallet = async () => {
-‎    if (entryFeeEtb === null) {
-‎      setPaymentError(
-‎        'የውድድሩን መግቢያ ክፍያ ማግኘት አልተቻለም።',
-‎      );
-‎      return;
-‎    }
-‎
-‎    if (walletBalance === null || walletBalance < entryFeeEtb) {
-‎      setPaymentError(
-‎        `በWallet ውስጥ ቢያንስ ${entryFeeEtb} ETB ያስፈልጋል።`,
-‎      );
+  if (entryFeeEtb === null) {
+    setPaymentError(
+      'የውድድሩን መግቢያ ክፍያ ማግኘት አልተቻለም።',
+    );
+    return;
+  }
+
+  if (walletBalance === null || walletBalance < entryFeeEtb) {
+    setPaymentError(
+      `በWallet ውስጥ ቢያንስ ${entryFeeEtb} ETB ያስፈልጋል።`,
+    );
+    return;
+  }
+
+  setWalletPaymentLoading(true);
+  setPaymentError(null);
+
+  try {
+    const result = await customFetch<
+      MiniAppBootstrap & {
+        wallet: {
+          balanceEtb: number;
+          currency: string;
+        };
+        payment: {
+          method: 'wallet';
+          status: 'success';
+          amountEtb: number;
+          alreadyConfirmed: boolean;
+        };
+      }
+    >('/api/mini-app/wallet/entry', {
+      method: 'POST',
+      responseType: 'json',
+    });
+
+    setWalletBalance(result.wallet.balanceEtb);
+    update(result);
+  } catch (error) {
+    setPaymentError(
+      extractApiErrorMessage(error) ??
+        'በWallet መክፈል አልተሳካም።',
+    );
+  } finally {
+    setWalletPaymentLoading(false);
+  }
+};
+‎      
 ‎      return;
 ‎    }
 ‎
