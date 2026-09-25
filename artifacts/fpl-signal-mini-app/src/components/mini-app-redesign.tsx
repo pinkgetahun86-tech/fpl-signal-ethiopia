@@ -957,7 +957,7 @@ if (walletBalance === null || walletBalance < entryFeeEtb) {
           </div>
           <TeamPitch players={selectedPlayers} starters={starters} captain={captain} vice={vice} />
 
-          {data.team.submissionStatus === 'awaiting_payment' && (
+{data.team.submissionStatus === 'awaiting_payment' && (
   <div className="payment-card">
     <div className="payment-icon">
       <WalletCards className="h-5 w-5" />
@@ -965,11 +965,17 @@ if (walletBalance === null || walletBalance < entryFeeEtb) {
 
     <div className="payment-copy">
       <strong>የውድድሩን ክፍያ ያጠናቁ</strong>
-      <p>የWeekly Challenge መግቢያ 100 ETB ነው።</p>
+
+      <p>
+        {entryFeeEtb === null
+          ? 'የውድድሩን መግቢያ ክፍያ በመጫን ላይ…'
+          : `የWeekly Challenge መግቢያ ${entryFeeEtb} ETB ነው።`}
+      </p>
 
       <div className="step-list">
         <div className="step-row">
           <WalletCards className="h-4 w-4" />
+
           <span>
             Wallet ቀሪ ሂሳብ:{' '}
             {walletLoading
@@ -986,10 +992,12 @@ if (walletBalance === null || walletBalance < entryFeeEtb) {
         className="button button-primary"
         onClick={() => void payWithWallet()}
         disabled={
+          competitionLoading ||
           walletLoading ||
           walletPaymentLoading ||
+          entryFeeEtb === null ||
           walletBalance === null ||
-          walletBalance < 100
+          walletBalance < entryFeeEtb
         }
       >
         {walletPaymentLoading ? (
@@ -997,22 +1005,28 @@ if (walletBalance === null || walletBalance < entryFeeEtb) {
         ) : (
           <WalletCards className="h-4 w-4" />
         )}
+
         {walletPaymentLoading
           ? 'በመክፈል ላይ…'
-          : 'በWallet 100 ETB ክፈል'}
+          : entryFeeEtb === null
+            ? 'ክፍያውን በመጫን ላይ…'
+            : `በWallet ${entryFeeEtb} ETB ክፈል`}
       </button>
+    </div>
 
-      <button
-        type="button"
-        className="button button-gold"
-        onClick={() => void startPayment()}
-        disabled={paymentLoading || walletPaymentLoading}
-      >
-        {paymentLoading ? (
-          <RefreshCw className="h-4 w-4 animate-spin" />
-        ) : (
-          <ArrowRight className="h-4 w-4" />
-        )}
+    {walletBalance !== null &&
+      entryFeeEtb !== null &&
+      walletBalance < entryFeeEtb && (
+        <p className="form-error">
+          በWallet ውስጥ በቂ ገንዘብ የለም። Wallet ይሙሉ።
+        </p>
+      )}
+  </div>
+)}
+
+{paymentError && (
+  <p className="form-error">{paymentError}</p>
+)}
         {paymentLoading ? 'በመክፈል ላይ…' : 'በChapa ክፈል'}
       </button>
     </div>
