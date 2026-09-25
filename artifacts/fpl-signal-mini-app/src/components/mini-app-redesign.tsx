@@ -1420,9 +1420,9 @@ function WalletPage() {
         </div>
 
         <p className="muted-copy">
-          Wallet ዎን በመጠቀም የWeekly Challenge
-          100 ETB መግቢያ ይክፈሉ።
-        </p>
+  Wallet ዎን በመጠቀም የWeekly Challenge
+  መግቢያ ክፍያ ይክፈሉ።
+</p>
       </section>
 
 <section className="simple-card">
