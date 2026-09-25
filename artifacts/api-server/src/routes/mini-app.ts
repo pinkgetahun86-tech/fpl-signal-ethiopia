@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router, type IRouter, type Request } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
+  gwCompetitions,
   gwPrizeSettlements,
   weeklyChallengeEntries,
   walletDeposits,
@@ -134,6 +135,56 @@ router.post("/mini-app/team", async (req, res) => {
     });
   }
 });
+
+/* ----------------------- Current competition ------------------------------ */
+
+router.get(
+  "/mini-app/competition/current",
+  async (req, res) => {
+    try {
+      await authenticatedUser(req);
+
+      const challenge =
+        await getCurrentChallenge();
+
+      const competition =
+        await ensureGwCompetition(
+          challenge,
+        );
+
+      return res.json({
+        competitionId:
+          competition.id,
+        gameweek:
+          competition.gameweek,
+        entryFeeEtb:
+          competition.entryFeeEtb,
+        currency:
+          competition.currency,
+        status:
+          competition.status,
+        locked:
+          challenge.locked ||
+          competition.status !== "open",
+        deadlineTime:
+          competition.deadlineTime
+            ?.toISOString() ?? null,
+      });
+    } catch (error) {
+      const status =
+        error instanceof MiniAppAuthError
+          ? error.status
+          : error instanceof MiniAppRequestError
+            ? error.status
+            : 503;
+
+      return res.status(status).json({
+        error:
+          errorMessage(error),
+      });
+    }
+  },
+);
 
 /* -------------------------------------------------------------------------- */
 /* Chapa payment                                                               */
@@ -572,7 +623,7 @@ router.post(
       const wallet =
         await getWallet(user.id);
 
-            return res.status(201).json({
+      return res.status(201).json({
         withdrawal: {
           id: withdrawal.withdrawal.id,
           method: withdrawal.withdrawal.method,
@@ -944,6 +995,255 @@ function requireAdmin(
     Buffer.from(configured),
   );
 }
+
+/* ---------------------------- Competition fee ---------------------------- */
+
+router.get(
+  "/admin/gw/current/entry-fee",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const challenge =
+        await getCurrentChallenge();
+
+      const competition =
+        await ensureGwCompetition(
+          challenge,
+        );
+
+      return res.json({
+        competitionId:
+          competition.id,
+        gameweek:
+          competition.gameweek,
+        entryFeeEtb:
+          competition.entryFeeEtb,
+        currency:
+          competition.currency,
+        status:
+          competition.status,
+        locked:
+          challenge.locked ||
+          competition.status !== "open",
+        deadlineTime:
+          competition.deadlineTime
+            ?.toISOString() ??
+          null,
+      });
+    } catch (error) {
+      logger.error(
+        { error },
+        "Could not load current GW entry fee",
+      );
+
+      return res.status(500).json({
+        error:
+          "Could not load current GW entry fee",
+      });
+    }
+  },
+);
+
+router.put(
+  "/admin/gw/current/entry-fee",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const amountEtb =
+        Number(
+          req.body?.entryFeeEtb,
+        );
+
+      if (
+        !Number.isSafeInteger(
+          amountEtb,
+        ) ||
+        amountEtb <= 0
+      ) {
+        return res.status(400).json({
+          error:
+            "Entry fee must be a positive whole ETB amount",
+        });
+      }
+
+      const challenge =
+        await getCurrentChallenge();
+
+      const competition =
+        await ensureGwCompetition(
+          challenge,
+        );
+
+      const updated =
+        await db.transaction(
+          async (tx) => {
+            await tx.execute(
+              sql`select pg_advisory_xact_lock(
+                hashtext(${
+                  "fpl-competition:" +
+                  competition.id
+                })
+              )`,
+            );
+
+            const currentRows =
+              await tx
+                .select({
+                  id:
+                    gwCompetitions.id,
+                  gameweek:
+                    gwCompetitions.gameweek,
+                  entryFeeEtb:
+                    gwCompetitions.entryFeeEtb,
+                  currency:
+                    gwCompetitions.currency,
+                  status:
+                    gwCompetitions.status,
+                  deadlineTime:
+                    gwCompetitions.deadlineTime,
+                })
+                .from(
+                  gwCompetitions,
+                )
+                .where(
+                  eq(
+                    gwCompetitions.id,
+                    competition.id,
+                  ),
+                )
+                .limit(1);
+
+            const current =
+              currentRows[0];
+
+            if (!current) {
+              throw new MiniAppRequestError(
+                "የውድድሩ መረጃ አልተገኘም።",
+                404,
+              );
+            }
+
+            if (
+              challenge.locked ||
+              current.status !==
+                "open"
+            ) {
+              throw new MiniAppRequestError(
+                "ውድድሩ ከተዘጋ ወይም ከተጀመረ በኋላ Entry Fee መቀየር አይቻልም።",
+                409,
+              );
+            }
+
+            const existingEntries =
+              await tx
+                .select({
+                  id:
+                    weeklyChallengeEntries.id,
+                })
+                .from(
+                  weeklyChallengeEntries,
+                )
+                .where(
+                  eq(
+                    weeklyChallengeEntries.competitionId,
+                    current.id,
+                  ),
+                )
+                .limit(1);
+
+            if (
+              existingEntries[0]
+            ) {
+              throw new MiniAppRequestError(
+                "በዚህ ውድድር ተሳታፊ ከተመዘገበ በኋላ Entry Fee መቀየር አይቻልም።",
+                409,
+              );
+            }
+
+            const rows =
+              await tx
+                .update(
+                  gwCompetitions,
+                )
+                .set({
+                  entryFeeEtb:
+                    amountEtb,
+                  updatedAt:
+                    new Date(),
+                })
+                .where(
+                  eq(
+                    gwCompetitions.id,
+                    current.id,
+                  ),
+                )
+                .returning({
+                  id:
+                    gwCompetitions.id,
+                  gameweek:
+                    gwCompetitions.gameweek,
+                  entryFeeEtb:
+                    gwCompetitions.entryFeeEtb,
+                  currency:
+                    gwCompetitions.currency,
+                  status:
+                    gwCompetitions.status,
+                  deadlineTime:
+                    gwCompetitions.deadlineTime,
+                });
+
+            return rows[0];
+          },
+        );
+
+      return res.json({
+        competitionId:
+          updated.id,
+        gameweek:
+          updated.gameweek,
+        entryFeeEtb:
+          updated.entryFeeEtb,
+        currency:
+          updated.currency,
+        status:
+          updated.status,
+        locked: false,
+        deadlineTime:
+          updated.deadlineTime
+            ?.toISOString() ??
+          null,
+      });
+    } catch (error) {
+      const status =
+        error instanceof
+        MiniAppRequestError
+          ? error.status
+          : 500;
+
+      if (status >= 500) {
+        logger.error(
+          { error },
+          "Could not update current GW entry fee",
+        );
+      }
+
+      return res.status(status).json({
+        error:
+          errorMessage(error),
+      });
+    }
+  },
+);
 
 /* ------------------------------ Deposits --------------------------------- */
 
