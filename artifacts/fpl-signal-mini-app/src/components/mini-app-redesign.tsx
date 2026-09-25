@@ -808,4 +808,1168 @@
 ‎  if (walletBalance === null || walletBalance < 100) {
 ‎    setPaymentError('በWallet ውስጥ ቢያንስ 100 ETB ያስፈልጋል።');
 ‎  
+‎‎  const payWithWallet = async () => {
+‎    if (entryFeeEtb === null) {
+‎      setPaymentError(
+‎        'የውድድሩን መግቢያ ክፍያ ማግኘት አልተቻለም።',
+‎      );
+‎      return;
+‎    }
 ‎
+‎    if (walletBalance === null || walletBalance < entryFeeEtb) {
+‎      setPaymentError(
+‎        `በWallet ውስጥ ቢያንስ ${entryFeeEtb} ETB ያስፈልጋል።`,
+‎      );
+‎      return;
+‎    }
+‎
+‎    setWalletPaymentLoading(true);
+‎    setPaymentError(null);
+‎
+‎    try {
+‎      const result = await customFetch<
+‎        MiniAppBootstrap & {
+‎          wallet: {
+‎            balanceEtb: number;
+‎            currency: string;
+‎          };
+‎          payment: {
+‎            method: 'wallet';
+‎            status: 'success';
+‎            amountEtb: number;
+‎            alreadyConfirmed: boolean;
+‎          };
+‎        }
+‎      >('/api/mini-app/wallet/entry', {
+‎        method: 'POST',
+‎        responseType: 'json',
+‎      });
+‎
+‎      setWalletBalance(result.wallet.balanceEtb);
+‎      update(result);
+‎    } catch (error) {
+‎      setPaymentError(
+‎        extractApiErrorMessage(error) ??
+‎          'በWallet መክፈል አልተሳካም።',
+‎      );
+‎    } finally {
+‎      setWalletPaymentLoading(false);
+‎    }
+‎  };
+‎
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="የሳምንቱ ውድድር"
+‎        title={`ሳምንት ${data.gameweek.id} ቡድን`}
+‎        note={
+‎          data.gameweek.locked
+‎            ? 'ይህ ሳምንት ተዘግቷል።'
+‎            : 'በቀላሉ ይምረጡና ይወዳደሩ።'
+‎        }
+‎        action={
+‎          <Pill tone={locked ? 'gold' : 'mint'}>
+‎            {locked ? (
+‎              <>
+‎                <LockKeyhole className="h-3 w-3" /> ተዘግቷል
+‎              </>
+‎            ) : (
+‎              'ክፍት ነው'
+‎            )}
+‎          </Pill>
+‎        }
+‎      />
+‎
+‎      {locked && (
+‎        <div className="notice notice-gold">
+‎          <LockKeyhole className="h-4 w-4 shrink-0" />
+‎          <span>
+‎            Deadline ካለፈ በኋላ ቡድን መቀየር አይቻልም።
+‎          </span>
+‎        </div>
+‎      )}
+‎
+‎      <BuilderSummary
+‎        selected={selected.length}
+‎        budgetUsed={budgetUsed}
+‎        starters={starters.length}
+‎        captain={!!captain}
+‎        vice={!!vice}
+‎      />
+‎
+‎      <StepRail
+‎        phase={phase}
+‎        setPhase={setPhase}
+‎        locked={locked}
+‎      />
+‎
+‎      {phase === 'squad' && (
+‎        <section className="builder-card">
+‎          <div className="builder-card-heading">
+‎            <div>
+‎              <p className="eyebrow">ደረጃ 1</p>
+‎              <h2>15 ተጫዋቾች ይምረጡ</h2>
+‎              <p className="section-note">
+‎                ቦታ ይምረጡ፣ ከዚያ ተጫዋች ይጨምሩ።
+‎              </p>
+‎            </div>
+‎            <Users className="heading-icon" />
+‎          </div>
+‎
+‎          <PositionTabs
+‎            active={position}
+‎            setActive={setPosition}
+‎          />
+‎
+‎          <div className="player-list">
+‎            {filteredPlayers.map((player) => (
+‎              <PlayerCard
+‎                key={player.id}
+‎                player={player}
+‎                selected={selected.includes(player.id)}
+‎                onClick={() => toggleSelected(player.id)}
+‎                disabled={
+‎                  locked ||
+‎                  (!selected.includes(player.id) &&
+‎                    selected.length >= 15)
+‎                }
+‎              />
+‎            ))}
+‎          </div>
+‎
+‎          {!filteredPlayers.length && (
+‎            <div className="empty-inline">
+‎              ለዚህ ቦታ ተጫዋች አልተገኘም።
+‎            </div>
+‎          )}
+‎
+‎          <div className="builder-footer">
+‎            <span>
+‎              {selected.length === 15
+‎                ? 'ቡድንዎ ተሟልቷል።'
+‎                : `${15 - selected.length} ተጫዋች ቀርቷል።`}
+‎            </span>
+‎
+‎            <button
+‎              type="button"
+‎              className="button button-primary"
+‎              disabled={!canMoveToXi || locked}
+‎              onClick={() => setPhase('xi')}
+‎            >
+‎              ቋሚ 11 ምረጥ
+‎              <ArrowRight className="h-4 w-4" />
+‎            </button>
+‎          </div>
+‎        </section>
+‎      )}
+‎
+‎      {phase === 'xi' && (
+‎        <section className="builder-card">
+‎          <div className="builder-card-heading">
+‎            <div>
+‎              <p className="eyebrow">ደረጃ 2</p>
+‎              <h2>ቋሚ 11 ምረጥ</h2>
+‎              <p className="section-note">
+‎                በሜዳው ላይ የሚጀምሩትን 11 ተጫዋቾች ይምረጡ።
+‎              </p>
+‎            </div>
+‎            <Target className="heading-icon" />
+‎          </div>
+‎
+‎          <TeamPitch
+‎            players={selectedPlayers}
+‎            starters={starters}
+‎            onToggle={toggleStarter}
+‎            selectable={!locked}
+‎          />
+‎
+‎          <div className="player-list compact-list">
+‎            {selectedPlayers.map((player) => (
+‎              <PlayerCard
+‎                key={player.id}
+‎                player={player}
+‎                selected={starters.includes(player.id)}
+‎                starter={starters.includes(player.id)}
+‎                onClick={() => toggleStarter(player.id)}
+‎                disabled={locked}
+‎              />
+‎            ))}
+‎          </div>
+‎
+‎          <div className="builder-footer">
+‎            <button
+‎              type="button"
+‎              className="button button-ghost"
+‎              onClick={() => setPhase('squad')}
+‎            >
+‎              <ArrowLeft className="h-4 w-4" />
+‎              ተመለስ
+‎            </button>
+‎
+‎            <button
+‎              type="button"
+‎              className="button button-primary"
+‎              disabled={!canMoveToCaptains || locked}
+‎              onClick={() => setPhase('captains')}
+‎            >
+‎              ካፒቴን ምረጥ
+‎              <ArrowRight className="h-4 w-4" />
+‎            </button>
+‎          </div>
+‎        </section>
+‎      )}
+‎
+‎      {phase === 'captains' && (
+‎        <section className="builder-card">
+‎          <div className="builder-card-heading">
+‎            <div>
+‎              <p className="eyebrow">ደረጃ 3</p>
+‎              <h2>ካፒቴን ይምረጡ</h2>
+‎              <p className="section-note">
+‎                ካፒቴን 2x ነጥብ ያገኛል።
+‎              </p>
+‎            </div>
+‎            <Crown className="heading-icon gold-icon" />
+‎          </div>
+‎
+‎          <div className="role-switch">
+‎            <button
+‎              type="button"
+‎              className={cn(
+‎                captainMode === 'captain' &&
+‎                  'role-switch-active',
+‎              )}
+‎              onClick={() => setCaptainMode('captain')}
+‎            >
+‎              <Crown className="h-4 w-4" />
+‎              ካፒቴን {captain && '✓'}
+‎            </button>
+‎
+‎            <button
+‎              type="button"
+‎              className={cn(
+‎                captainMode === 'vice' &&
+‎                  'role-switch-active',
+‎              )}
+‎              onClick={() => setCaptainMode('vice')}
+‎            >
+‎              <ShieldCheck className="h-4 w-4" />
+‎              ምክትል {vice && '✓'}
+‎            </button>
+‎          </div>
+‎
+‎          <div className="player-list">
+‎            {starterPlayers.map((player) => (
+‎              <PlayerCard
+‎                key={player.id}
+‎                player={player}
+‎                selected={
+‎                  captain === player.id ||
+‎                  vice === player.id
+‎                }
+‎                captain={captain === player.id}
+‎                vice={vice === player.id}
+‎                onClick={() => chooseCaptain(player.id)}
+‎                disabled={locked}
+‎              />
+‎            ))}
+‎          </div>
+‎
+‎          <div className="builder-footer">
+‎            <button
+‎              type="button"
+‎              className="button button-ghost"
+‎              onClick={() => setPhase('xi')}
+‎            >
+‎              <ArrowLeft className="h-4 w-4" />
+‎              ተመለስ
+‎            </button>
+‎
+‎            <button
+‎              type="button"
+‎              className="button button-primary"
+‎              disabled={!canConfirm || locked}
+‎              onClick={() => setPhase('confirm')}
+‎            >
+‎              ቡድኔን አረጋግጥ
+‎              <ArrowRight className="h-4 w-4" />
+‎            </button>
+‎          </div>
+‎        </section>
+‎      )}
+‎
+‎      {phase === 'confirm' && (
+‎        <section className="builder-card">
+‎          <div className="builder-card-heading">
+‎            <div>
+‎              <p className="eyebrow">ደረጃ 4</p>
+‎              <h2>የእርስዎ ቡድን</h2>
+‎              <p className="section-note">
+‎                ሁሉም ነገር ትክክል ከሆነ ያረጋግጡ።
+‎              </p>
+‎            </div>
+‎            <Check className="heading-icon" />
+‎          </div>
+‎
+‎          <div className="confirm-card">
+‎            <div>
+‎              <span>15 ተጫዋቾች</span>
+‎              <strong>{selected.length}/15</strong>
+‎            </div>
+‎
+‎            <div>
+‎              <span>ቋሚ 11</span>
+‎              <strong>{starters.length}/11</strong>
+‎            </div>
+‎
+‎            <div>
+‎              <span>ካፒቴን</span>
+‎              <strong>
+‎                {byId.get(captain ?? 0)?.name ?? '—'}
+‎              </strong>
+‎            </div>
+‎
+‎            <div>
+‎              <span>ምክትል ካፒቴን</span>
+‎              <strong>
+‎                {byId.get(vice ?? 0)?.name ?? '—'}
+‎              </strong>
+‎            </div>
+‎
+‎            <div>
+‎              <span>የቀረው በጀት</span>
+‎              <strong>
+‎                {price(Math.max(0, 100 - budgetUsed))}
+‎              </strong>
+‎            </div>
+‎          </div>
+‎
+‎          <TeamPitch
+‎            players={selectedPlayers}
+‎            starters={starters}
+‎            captain={captain}
+‎            vice={vice}
+‎          />
+‎
+‎          {data.team.submissionStatus ===
+‎            'awaiting_payment' && (
+‎            <div className="payment-card">
+‎              <div className="payment-icon">
+‎                <WalletCards className="h-5 w-5" />
+‎              </div>
+‎
+‎              <div className="payment-copy">
+‎                <strong>
+‎                  የውድድሩን ክፍያ ያጠናቁ
+‎                </strong>
+‎
+‎                <p>
+‎                  {entryFeeEtb === null
+‎                    ? 'የውድድሩን መግቢያ ክፍያ በመጫን ላይ…'
+‎                    : `የWeekly Challenge መግቢያ ${entryFeeEtb} ETB ነው።`}
+‎                </p>
+‎
+‎                <div className="step-list">
+‎                  <div className="step-row">
+‎                    <WalletCards className="h-4 w-4" />
+‎
+‎                    <span>
+‎                      Wallet ቀሪ ሂሳብ:{' '}
+‎                      {walletLoading
+‎                        ? 'በመጫን ላይ…'
+‎                        : `${walletBalance ?? 0} ETB`}
+‎                    </span>
+‎                  </div>
+‎                </div>
+‎              </div>
+‎
+‎              <div className="payment-actions">
+‎                <button
+‎                  type="button"
+‎                  className="button button-primary"
+‎                  onClick={() => void payWithWallet()}
+‎                  disabled={
+‎                    competitionLoading ||
+‎                    walletLoading ||
+‎                    walletPaymentLoading ||
+‎                    entryFeeEtb === null ||
+‎                    walletBalance === null ||
+‎                    walletBalance < entryFeeEtb
+‎                  }
+‎                >
+‎                  {walletPaymentLoading ? (
+‎                    <RefreshCw className="h-4 w-4 animate-spin" />
+‎                  ) : (
+‎                    <WalletCards className="h-4 w-4" />
+‎                  )}
+‎
+‎                  {walletPaymentLoading
+‎                    ? 'በመክፈል ላይ…'
+‎                    : entryFeeEtb === null
+‎                      ? 'ክፍያውን በመጫን ላይ…'
+‎                      : `በWallet ${entryFeeEtb} ETB ክፈል`}
+‎                </button>
+‎              </div>
+‎
+‎              {walletBalance !== null &&
+‎                entryFeeEtb !== null &&
+‎                walletBalance < entryFeeEtb && (
+‎                  <p className="form-error">
+‎                    በWallet ውስጥ በቂ ገንዘብ የለም።
+‎                    Wallet ይሙሉ።
+‎                  </p>
+‎                )}
+‎            </div>
+‎          )}
+‎
+‎          {paymentError && (
+‎            <p className="form-error">
+‎              {paymentError}
+‎            </p>
+‎          )}
+‎
+‎          <div className="builder-footer">
+‎            <button
+‎              type="button"
+‎              className="button button-ghost"
+‎              onClick={() => setPhase('captains')}
+‎            >
+‎              <ArrowLeft className="h-4 w-4" />
+‎              ተመለስ
+‎            </button>
+‎
+‎            <button
+‎              type="button"
+‎              className="button button-primary button-large"
+‎              disabled={
+‎                !canConfirm ||
+‎                locked ||
+‎                saveTeam.isPending
+‎              }
+‎              onClick={submit}
+‎              data-testid="button-confirm-team"
+‎            >
+‎              {saveTeam.isPending ? (
+‎                <RefreshCw className="h-4 w-4 animate-spin" />
+‎              ) : (
+‎                <Check className="h-4 w-4" />
+‎              )}
+‎
+‎              {saveTeam.isPending
+‎                ? 'በመላክ ላይ…'
+‎                : data.team.registered
+‎                  ? 'ለውጡን አስቀምጥ'
+‎                  : 'ቡድኔን አረጋግጥ'}
+‎            </button>
+‎          </div>
+‎
+‎          {saveTeam.isError && (
+‎            <p className="form-error">
+‎              {extractApiErrorMessage(saveTeam.error) ??
+‎                'ቡድኑን ማስቀመጥ አልተቻለም። እንደገና ይሞክሩ።'}
+‎            </p>
+‎          )}
+‎        </section>
+‎      )}
+‎    </div>
+‎  );
+‎}
+‎
+‎function TeamPage({ data }: { data: MiniAppBootstrap }) {
+‎  const byId = useMemo(
+‎    () =>
+‎      new Map(
+‎        data.players.map((player) => [
+‎          player.id,
+‎          player,
+‎        ]),
+‎      ),
+‎    [data.players],
+‎  );
+‎
+‎  const starters = data.team.startingPlayerIds
+‎    .map((id) => byId.get(id))
+‎    .filter(Boolean) as MiniAppPlayer[];
+‎
+‎  const bench = data.team.benchPlayerIds
+‎    .map((id) => byId.get(id))
+‎    .filter(Boolean) as MiniAppPlayer[];
+‎
+‎  const currentUser = data.leaderboard.find(
+‎    (entry) => entry.isCurrentUser,
+‎  );
+‎
+‎  if (!data.team.registered) {
+‎    return (
+‎      <div className="page-stack">
+‎        <SectionTitle
+‎          eyebrow="ቡድኔ"
+‎          title="የእኔ ቡድን"
+‎          note="ገና ቡድንዎን አላስቀመጡም።"
+‎        />
+‎
+‎        <div className="empty-state">
+‎          <div className="empty-icon">
+‎            <Users className="h-7 w-7" />
+‎          </div>
+‎
+‎          <h2>ቡድንዎን ይጀምሩ</h2>
+‎
+‎          <p>
+‎            15 ተጫዋቾች ይምረጡ፣ ቋሚ 11ዎን
+‎            ያዘጋጁና ይወዳደሩ።
+‎          </p>
+‎
+‎          <Link
+‎            href="/challenge"
+‎            className="button button-primary"
+‎          >
+‎            ቡድኔን እመርጣለሁ
+‎            <ArrowRight className="h-4 w-4" />
+‎          </Link>
+‎        </div>
+‎      </div>
+‎    );
+‎  }
+‎
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="ቡድኔ"
+‎        title="የእኔ ቡድን"
+‎        note={`ሳምንት ${data.gameweek.id} · ${statusLabel(
+‎          data.team.submissionStatus,
+‎        )}`}
+‎        action={
+‎          <Link
+‎            href="/challenge"
+‎            className="button button-small button-ghost"
+‎          >
+‎            አስተካክል
+‎          </Link>
+‎        }
+‎      />
+‎
+‎      <div className="stat-grid">
+‎        <StatTile
+‎          label="የእኔ ነጥብ"
+‎          value={data.team.points}
+‎          icon={Zap}
+‎          tone="gold"
+‎        />
+‎
+‎        <StatTile
+‎          label="ደረጃ"
+‎          value={
+‎            currentUser
+‎              ? `#${currentUser.rank}`
+‎              : '—'
+‎          }
+‎          icon={Trophy}
+‎          tone="blue"
+‎        />
+‎
+‎        <StatTile
+‎          label="ቋሚ 11"
+‎          value={starters.length}
+‎          icon={Target}
+‎        />
+‎      </div>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">በሜዳ ላይ</p>
+‎            <h2>ቋሚ 11</h2>
+‎          </div>
+‎
+‎          <Pill tone="mint">
+‎            {pointsSourceLabel(
+‎              data.team.pointsSource,
+‎            )}
+‎          </Pill>
+‎        </div>
+‎
+‎        <TeamPitch
+‎          players={starters}
+‎          starters={data.team.startingPlayerIds}
+‎          captain={data.team.captainPlayerId}
+‎          vice={data.team.viceCaptainPlayerId}
+‎        />
+‎
+‎        <div className="role-summary">
+‎          <div>
+‎            <Crown className="h-4 w-4 gold-icon" />
+‎            <span>ካፒቴን</span>
+‎            <strong>
+‎              {byId.get(
+‎                data.team.captainPlayerId ?? 0,
+‎              )?.name ?? '—'}
+‎            </strong>
+‎          </div>
+‎
+‎          <div>
+‎            <ShieldCheck className="h-4 w-4 text-mint" />
+‎            <span>ምክትል ካፒቴን</span>
+‎            <strong>
+‎              {byId.get(
+‎                data.team.viceCaptainPlayerId ?? 0,
+‎              )?.name ?? '—'}
+‎            </strong>
+‎          </div>
+‎        </div>
+‎      </section>
+‎
+‎      <section className="simple-card">
+‎        <div className="card-heading">
+‎          <div>
+‎            <p className="eyebrow">ተቀያሪዎች</p>
+‎            <h2>{bench.length} ተጫዋቾች</h2>
+‎          </div>
+‎
+‎          <Users className="heading-icon" />
+‎        </div>
+‎
+‎        <div className="player-list compact-list">
+‎          {bench.map((player) => (
+‎            <PlayerCard
+‎              key={player.id}
+‎              player={player}
+‎            />
+‎          ))}
+‎        </div>
+‎      </section>
+‎    </div>
+‎  );
+‎}
+‎
+‎function LeaderboardPage({
+‎  data,
+‎  update,
+‎}: {
+‎  data: MiniAppBootstrap;
+‎  update: (next: MiniAppBootstrap) => void;
+‎}) {
+‎  const refresh = useRefreshMiniAppLeaderboard();
+‎  const currentUser = data.leaderboard.find(
+‎    (entry) => entry.isCurrentUser,
+‎  );
+‎
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="ውድድር"
+‎        title="ደረጃ ሰንጠረዥ"
+‎        note={`ሳምንት ${data.gameweek.id} ውጤቶች`}
+‎        action={
+‎          <button
+‎            type="button"
+‎            className="icon-button icon-button-filled"
+‎            onClick={() =>
+‎              refresh.mutate(undefined, {
+‎                onSuccess: update,
+‎              })
+‎            }
+‎            disabled={refresh.isPending}
+‎            aria-label="ደረጃ አድስ"
+‎          >
+‎            <RefreshCw
+‎              className={cn(
+‎                'h-4 w-4',
+‎                refresh.isPending && 'animate-spin',
+‎              )}
+‎            />
+‎          </button>
+‎        }
+‎      />
+‎
+‎      {currentUser && (
+‎        <section className="rank-card">
+‎          <div>
+‎            <span>የእርስዎ ደረጃ</span>
+‎            <strong>#{currentUser.rank}</strong>
+‎          </div>
+‎
+‎          <div>
+‎            <span>ነጥብ</span>
+‎            <strong>{currentUser.points}</strong>
+‎          </div>
+‎
+‎          <Trophy className="rank-card-icon" />
+‎        </section>
+‎      )}
+‎
+‎      <section className="leaderboard-card">
+‎        <div className="leaderboard-head">
+‎          <span>ደረጃ</span>
+‎          <span>ተጫዋች</span>
+‎          <span>ነጥብ</span>
+‎        </div>
+‎
+‎        {data.leaderboard.length ? (
+‎          data.leaderboard.map((entry) => (
+‎            <div
+‎              className={cn(
+‎                'leaderboard-row',
+‎                entry.isCurrentUser &&
+‎                  'leaderboard-row-current',
+‎              )}
+‎              key={`${entry.displayName}-${entry.rank}`}
+‎            >
+‎              <strong
+‎                className={cn(
+‎                  entry.rank <= 3 && 'top-rank',
+‎                )}
+‎              >
+‎                {entry.rank}
+‎              </strong>
+‎
+‎              <div className="leaderboard-name">
+‎                <span className="leaderboard-avatar">
+‎                  {entry.displayName
+‎                    .slice(0, 1)
+‎                    .toUpperCase()}
+‎                </span>
+‎
+‎                <span>
+‎                  {entry.displayName}
+‎
+‎                  {entry.isCurrentUser && (
+‎                    <small>እርስዎ</small>
+‎                  )}
+‎                </span>
+‎              </div>
+‎
+‎              <strong>{entry.points}</strong>
+‎            </div>
+‎          ))
+‎        ) : (
+‎          <div className="empty-inline">
+‎            ገና ደረጃ ሰንጠረዥ የለም።
+‎          </div>
+‎        )}
+‎      </section>
+‎
+‎      {refresh.isError && (
+‎        <p className="form-error">
+‎          ደረጃውን ማደስ አልተቻለም።
+‎        </p>
+‎      )}
+‎    </div>
+‎  );
+‎}
+‎
+‎function PointsPage({
+‎  data,
+‎}: {
+‎  data: MiniAppBootstrap;
+‎}) {
+‎  const [search, setSearch] = useState('');
+‎  const [position, setPosition] =
+‎    useState<'all' | Position>('all');
+‎
+‎  const players = useMemo(
+‎    () =>
+‎      data.players
+‎        .filter(
+‎          (player) =>
+‎            (position === 'all' ||
+‎              player.position === position) &&
+‎            `${player.name} ${player.club}`
+‎              .toLowerCase()
+‎              .includes(search.toLowerCase()),
+‎        )
+‎        .sort(
+‎          (a, b) =>
+‎            b.totalPoints - a.totalPoints,
+‎        ),
+‎    [data.players, position, search],
+‎  );
+‎
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="የFPL መረጃ"
+‎        title="የተጫዋች ነጥቦች"
+‎        note="ኦፊሴላዊ የFPL ነጥቦች።"
+‎      />
+‎
+‎      <div className="search-row">
+‎        <label className="search-box">
+‎          <Search className="h-4 w-4" />
+‎
+‎          <input
+‎            type="search"
+‎            value={search}
+‎            onChange={(event) =>
+‎              setSearch(event.target.value)
+‎            }
+‎            placeholder="ተጫዋች ወይም ክለብ ፈልግ"
+‎            aria-label="ተጫዋች ፈልግ"
+‎          />
+‎        </label>
+‎
+‎        <select
+‎          value={position}
+‎          onChange={(event) =>
+‎            setPosition(
+‎              event.target.value as
+‎                | 'all'
+‎                | Position,
+‎            )
+‎          }
+‎          aria-label="ቦታ ምረጥ"
+‎        >
+‎          <option value="all">ሁሉም</option>
+‎
+‎          {positionOrder.map((item) => (
+‎            <option value={item} key={item}>
+‎              {positionLabels[item]}
+‎            </option>
+‎          ))}
+‎        </select>
+‎      </div>
+‎
+‎      <section className="leaderboard-card player-table">
+‎        {players.map((player) => (
+‎          <div
+‎            className="points-row"
+‎            key={player.id}
+‎          >
+‎            <div className="player-position">
+‎              {positionShortLabels[
+‎                player.position
+‎              ]}
+‎            </div>
+‎
+‎            <div className="leaderboard-name">
+‎              <strong>{player.name}</strong>
+‎              <small>
+‎                {player.club} ·{' '}
+‎                {playerStatus(player)}
+‎              </small>
+‎            </div>
+‎
+‎            <div>
+‎              <strong>{player.totalPoints}</strong>
+‎              <small>ነጥብ</small>
+‎            </div>
+‎
+‎            <div>
+‎              <strong>
+‎                {price(player.price)}
+‎              </strong>
+‎              <small>ዋጋ</small>
+‎            </div>
+‎          </div>
+‎        ))}
+‎      </section>
+‎    </div>
+‎  );
+‎}
+‎
+‎function SignalPage({
+‎  data,
+‎}: {
+‎  data: MiniAppBootstrap;
+‎}) {
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="FPL Signal"
+‎        title="የውሳኔ ምልክቶች"
+‎        note="ከኦፊሴላዊ መረጃ የተወሰዱ ምልክቶች።"
+‎      />
+‎
+‎      <div className="notice notice-gold">
+‎        <CircleAlert className="h-4 w-4 shrink-0" />
+‎
+‎        <span>
+‎          {data.signal.disclaimer ||
+‎            'ምልክቶቹ የአሁኑን መረጃ ያሳያሉ፤ የወደፊት ነጥብ ዋስትና አይሰጡም።'}
+‎        </span>
+‎      </div>
+‎
+‎      {data.signal.available &&
+‎      data.signal.signals.length ? (
+‎        data.signal.signals.map((item) => (
+‎          <section
+‎            className="signal-card"
+‎            key={`${item.kind}-${item.playerId}`}
+‎          >
+‎            <div className="signal-top">
+‎              <Pill tone="mint">
+‎                {item.title}
+‎              </Pill>
+‎
+‎              <span>{price(item.price)}</span>
+‎            </div>
+‎
+‎            <h2>{item.playerName}</h2>
+‎
+‎            <p className="muted-copy">
+‎              {item.club} ·{' '}
+‎              {positionLabels[item.position]}
+‎            </p>
+‎
+‎            <p>{item.detail}</p>
+‎          </section>
+‎        ))
+‎      ) : (
+‎        <div className="empty-state">
+‎          <div className="empty-icon">
+‎            <Zap className="h-7 w-7" />
+‎          </div>
+‎
+‎          <h2>ገና ምልክት የለም</h2>
+‎
+‎          <p>
+‎            {data.signal.message ||
+‎              'በቂ መረጃ ሲኖር እዚህ ይታያል።'}
+‎          </p>
+‎        </div>
+‎      )}
+‎    </div>
+‎  );
+‎}
+‎
+‎function AboutPage() {
+‎  return (
+‎    <div className="page-stack">
+‎      <SectionTitle
+‎        eyebrow="ተጨማሪ"
+‎        title="FPL Signal Ethiopia"
+‎        note="በTelegram ውስጥ የሚሰራ ቀላል የFPL መሳሪያ።"
+‎      />
+‎
+‎      <div className="more-grid">
+‎        <Link
+‎          href="/points"
+‎          className="more-link"
+‎        >
+‎          <BarChart3 className="h-5 w-5" />
+‎
+‎          <span>
+‎            <strong>የFPL ነጥቦች</strong>
+‎            <small>
+‎              የተጫዋቾችን ነጥብ ይመልከቱ
+‎            </small>
+‎          </span>
+‎
+‎          <ChevronRight className="ml-auto h-4 w-4" />
+‎        </Link>
+‎
+‎        <Link
+‎          href="/signal"
+‎          className="more-link"
+‎        >
+‎          <Zap className="h-5 w-5" />
+‎
+‎          <span>
+‎            <strong>የውሳኔ ምልክቶች</strong>
+‎            <small>
+‎              ከመረጃ የተወሰዱ ምልክቶች
+‎            </small>
+‎          </span>
+‎
+‎          <ChevronRight className="ml-auto h-4 w-4" />
+‎        </Link>
+‎      </div>
+‎
+‎      <section className="about-card">
+‎        <LogoMark />
+‎
+‎        <h2>ፈጣን። ግልጽ። የታመነ።</h2>
+‎
+‎        <p>
+‎          ቡድንዎን በግልጽ መረጃ ይምረጡ።
+‎          ነጥቦች ከኦፊሴላዊ የFPL ምንጭ ብቻ
+‎          ይመጣሉ።
+‎        </p>
+‎
+‎        <div className="about-badges">
+‎          <Pill tone="mint">
+‎            <ShieldCheck className="h-3 w-3" />
+‎            የታመነ መረጃ
+‎          </Pill>
+‎
+‎          <Pill tone="gold">
+‎            <Sparkles className="h-3 w-3" />
+‎            ቀላል አጠቃቀም
+‎          </Pill>
+‎        </div>
+‎      </section>
+‎    </div>
+‎  );
+‎}
+‎
+‎type WalletWithdrawal = {
+‎  id: number;
+‎  method: string;
+‎  amountEtb: number;
+‎  destination: string;
+‎  status: string;
+‎  payoutReference: string | null;
+‎  adminNote: string | null;
+‎  approvedAt: string | null;
+‎  rejectedAt: string | null;
+‎  paidAt: string | null;
+‎  createdAt: string;
+‎};
+‎
+‎function WalletPage() {
+‎  const [balance, setBalance] =
+‎    useState<number | null>(null);
+‎
+‎  const [transactions, setTransactions] =
+‎    useState<WalletTransaction[]>([]);
+‎
+‎  const [deposits, setDeposits] =
+‎    useState<WalletDeposit[]>([]);
+‎
+‎  const [withdrawals, setWithdrawals] =
+‎    useState<WalletWithdrawal[]>([]);
+‎
+‎  const [amount, setAmount] = useState('');
+‎  const [transactionReference, setTransactionReference] =
+‎    useState('');
+‎
+‎  const [withdrawAmount, setWithdrawAmount] =
+‎    useState('');
+‎
+‎  const [withdrawDestination, setWithdrawDestination] =
+‎    useState('');
+‎
+‎  const [loading, setLoading] =
+‎    useState(true);
+‎
+‎  const [submitting, setSubmitting] =
+‎    useState(false);
+‎
+‎  const [withdrawing, setWithdrawing] =
+‎    useState(false);
+‎
+‎  const [error, setError] =
+‎    useState<string | null>(null);
+‎
+‎  const [success, setSuccess] =
+‎    useState<string | null>(null);
+‎
+‎  const withdrawalStatusLabel = (
+‎    value: string,
+‎  ) => {
+‎    if (value === 'pending')
+‎      return 'በመጠባበቅ ላይ';
+‎
+‎    if (value === 'approved')
+‎      return 'ተፈቅዷል';
+‎
+‎    if (value === 'rejected')
+‎      return 'ተቀባይነት አላገኘም';
+‎
+‎    if (value === 'paid')
+‎      return 'ተከፍሏል';
+‎
+‎    return value;
+‎  };
+‎
+‎  const depositStatusLabel = (
+‎    value: string,
+‎  ) => {
+‎    if (value === 'pending')
+‎      return 'በመጠባበቅ ላይ';
+‎
+‎    if (value === 'approved')
+‎      return 'ተፈቅዷል';
+‎
+‎    if (value === 'rejected')
+‎      return 'ተቀባይነት አላገኘም';
+‎
+‎    return value;
+‎  };
+‎
+‎  const loadWallet = useCallback(
+‎    async () => {
+‎      setLoading(true);
+‎      setError(null);
+‎
+‎      try {
+‎        const [
+‎          wallet,
+‎          transactionData,
+‎          depositData,
+‎          withdrawalData,
+‎        ] = await Promise.all([
+‎          customFetch<{
+‎            balanceEtb: number;
+‎            currency: string;
+‎          }>('/api/mini-app/wallet', {
+‎            method: 'GET',
+‎            responseType: 'json',
+‎          }),
+‎
+‎          customFetch<{
+‎            transactions: WalletTransaction[];
+‎          }>(
+‎            '/api/mini-app/wallet/transactions',
+‎            {
+‎              method: 'GET',
+‎              responseType: 'json',
+‎            },
+‎          ),
+‎
+‎          customFetch<{
+‎            deposits: WalletDeposit[];
+‎          }>(
+‎            '/api/mini-app/wallet/deposits',
+‎            {
+‎              method: 'GET',
+‎              responseType: 'json',
+‎            },
+‎          ),
+‎
+‎          customFetch<{
+‎            withdrawals: WalletWithdrawal[];
+‎          }>(
+‎            '/api/mini-app/wallet/withdrawals',
+‎            {
+‎              method: 'GET',
+‎              responseType: 'json',
+‎            },
+‎          ),
+‎        ]);
+‎
+‎        setBalance(wallet.balanceEtb);
+‎        setTransactions(
+‎          transactionData.transactions,
+‎        );
+‎        setDeposits(depositData.deposits);
+‎        setWithdrawals(
+‎          withdrawalData.withdrawals,
+‎        );
+‎      } catch (err) {
+‎        setError(
+‎          extractApiErrorMessage(err) ??
+‎            'የWallet መረጃን መጫን አልተቻለም።',
+‎        );
+‎      } finally {
+‎        setLoading(false);
+‎      }
+‎    },
+‎    [],
+‎  );
+‎
+‎  useEffect(() => {
+‎    void loadWallet();
+‎  }, [loadWallet]);
+‎
+‎  const submitDeposit = async (
+‎    event: FormEvent<HTMLFormElement>,
+‎  ) => {
+‎    event.preventDefault();
+‎
+‎    const parsedAmount = Number(amount);
+‎
+‎    if (
+‎      !Number.isSafeInteger(parsedAmount) ||
+‎      parsedAmount 
