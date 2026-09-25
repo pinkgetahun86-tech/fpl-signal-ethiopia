@@ -2548,7 +2548,7 @@
     ) : location === '/points' ? (
       <PointsPage data={data} />
     ) : location === '/signal' ? (
-      <SignalPage data={data}
+      <SignalPage data={data} />
     ) : location === '/wallet' ? (
       <WalletPage />
     ) : location === '/about' ? (
