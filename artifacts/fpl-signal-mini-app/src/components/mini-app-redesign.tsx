@@ -297,7 +297,8 @@ function AppShell({ children, data }: { children: ReactNode; data: MiniAppBootst
 
   const navItems = [
   { href: '/', label: 'መነሻ', icon: Home, active: location === '/' },
-  { href: '/team', label: 'ቡድኔ', icon: Users, active: location === '/team' || location === '/challenge' },
+  { href: '/challenge', label: 'Weekly Challenge', icon: Trophy, active: location === '/challenge' },
+  { href: '/team', label: 'ቡድኔ', icon: Users, active: location === '/team' },
   { href: '/leaderboard', label: 'ደረጃ', icon: Trophy, active: location === '/leaderboard' },
   { href: '/wallet', label: 'Wallet', icon: WalletCards, active: location === '/wallet' },
   { href: '/about', label: 'ተጨማሪ', icon: MoreHorizontal, active: ['/about', '/points', '/signal'].includes(location) },
