@@ -145,10 +145,12 @@ router.get(
       await authenticatedUser(req);
 
       const challenge =
-        await g| (
-          challenge,
-        );
+  await getCurrentChallenge();
 
+const competition =
+  await ensureGwCompetition(
+    challenge,
+  );
       return res.json({
         competitionId:
           competition.id,
