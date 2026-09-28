@@ -1,0 +1,45 @@
+name: Clean Mini App Invisible Characters
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove only U+200E characters
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("artifacts/fpl-signal-mini-app/src/components/mini-app-redesign.tsx")
+          text = path.read_text(encoding="utf-8")
+          cleaned = text.replace("\u200e", "")
+
+          if cleaned == text:
+              print("No U+200E characters found.")
+          else:
+              removed = text.count("\u200e")
+              path.write_text(cleaned, encoding="utf-8")
+              print(f"Removed {removed} U+200E characters.")
+          PY
+
+      - name: Commit cleaned file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/fpl-signal-mini-app/src/components/mini-app-redesign.tsx
+
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+          else
+            git commit -m "Clean invisible characters from mini app"
+            git push
+          fi
