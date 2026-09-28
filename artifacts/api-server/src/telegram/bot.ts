@@ -52,13 +52,11 @@ function acquirePoolClient() {
   return pool.connect();
 }
 
-type BotLockClient = Awaited<ReturnType<typeof acquirePoolClient>>;
 let botLockClient: BotLockClient | undefined;
 let botLockRetryTimer: ReturnType<typeof setInterval> | undefined;
 let scoreRefreshTimer: ReturnType<typeof setInterval> | undefined;
-let activeScoreRefresh: Promise<number> | undefined;
+const activeScoreRefreshes = new Map<number, Promise<number>>();
 const SCORE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-
 const positionOrder: FplPosition[] = ["goalkeeper", "defender", "midfielder", "forward"];
 const positionLabels: Record<FplPosition, string> = {
   goalkeeper: "ግብ ጠባቂዎች",
