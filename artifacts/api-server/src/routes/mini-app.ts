@@ -1136,7 +1136,16 @@ router.put(
                 404,
               );
             }
-
+            if (
+              current.deadlineTime &&
+              Date.now() >=
+                current.deadlineTime.getTime()
+            ) {
+              throw new MiniAppRequestError(
+                "የውድድሩ ጊዜ አልፏል። Entry Fee መቀየር አይቻልም።",
+                409,
+              );
+            }
             if (
               challenge.locked ||
               current.status !==
