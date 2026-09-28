@@ -301,7 +301,10 @@ function sameIds(first: number[], second: number[]): boolean {
   return first.length === second.length && first.every((id, index) => id === second[index]);
 }
 
-async function refreshChallengeScoresInternal(challenge: WeeklyChallenge): Promise<number> {
+async function refreshChallengeScoresInternal(
+  challenge: WeeklyChallenge,
+  strict = false,
+): Promise<number> {
   const entries = await db
     .select()
     .from(weeklyChallengeEntries)
@@ -350,6 +353,10 @@ try {
         liveStats,
       );
     } catch (error) {
+      if (strict) {
+        throw error;
+      }
+
       logger.error(
         { error, entryId: entry.id },
         "Skipping invalid Weekly Challenge entry during score refresh",
@@ -399,6 +406,7 @@ try {
 
 export async function refreshChallengeScores(
   challenge: WeeklyChallenge,
+  strict = false,
 ): Promise<number> {
   const gameweek = challenge.gameweek;
   const activeRefresh = activeScoreRefreshes.get(gameweek);
@@ -407,7 +415,10 @@ export async function refreshChallengeScores(
     return activeRefresh;
   }
 
-  const refresh = refreshChallengeScoresInternal(challenge);
+    const refresh = refreshChallengeScoresInternal(
+    challenge,
+    strict,
+  );
   activeScoreRefreshes.set(gameweek, refresh);
 
   try {
