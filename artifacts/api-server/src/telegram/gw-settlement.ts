@@ -90,10 +90,31 @@ async function creditPrizeSettlementTx(
   }
 
   await tx.execute(
-    sql`select pg_advisory_xact_lock(
-      hashtext(${`fpl-prize-settlement:${settlement.id}`})
-    )`,
+  sql`select pg_advisory_xact_lock(
+    hashtext(${`fpl-prize-payout-reference:${cleanPayoutReference}`})
+  )`,
+);
+
+const existingPayoutReference = await tx
+  .select({ id: gwPrizeSettlements.id })
+  .from(gwPrizeSettlements)
+  .where(
+    eq(
+      gwPrizeSettlements.payoutReference,
+      cleanPayoutReference,
+    ),
+  )
+  .limit(1)
+  .then((rows) => rows[0]);
+
+if (
+  existingPayoutReference &&
+  existingPayoutReference.id !== settlement.id
+) {
+  throw new Error(
+    "Payout reference has already been used",
   );
+}
 
   const currentSettlement = await tx
     .select()
