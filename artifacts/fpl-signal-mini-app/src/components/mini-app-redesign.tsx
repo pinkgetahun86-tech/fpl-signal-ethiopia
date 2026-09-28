@@ -413,11 +413,13 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
     locked: boolean;
     deadlineTime: string | null;
   } | null>(null);
+  const competitionLoading = competition === null;
 
   const competitionLocked =
     challengeLocked ||
-    competition?.locked === true ||
-    competition?.status !== 'open';
+    (competition !== null &&
+      (competition.locked ||
+        competition.status !== 'open'));
 
   useEffect(() => {
     let active = true;
@@ -444,9 +446,6 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
     };
   }, []);
 
-  const competitionLoading =
-    competition === null;
-
   return (
     <div className="page-stack">
       <section className="welcome-row">
@@ -466,9 +465,11 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
 
         <div className="live-dot">
           <span />
-          {competitionLocked
-            ? 'ዝግ'
-            : 'ቀጥታ'}
+          {competitionLoading
+            ? '...'
+            : competitionLocked
+              ? 'ዝግ'
+              : 'ክፍት'}
         </div>
       </section>
 
@@ -485,14 +486,18 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
 
             <Pill
               tone={
-                competitionLocked
-                  ? 'gold'
-                  : 'mint'
+                competitionLoading
+                  ? 'neutral'
+                  : competitionLocked
+                    ? 'gold'
+                    : 'mint'
               }
             >
-              {competitionLocked
-                ? 'ተዘግቷል'
-                : 'ክፍት ነው'}
+              {competitionLoading
+                ? 'በመጫን ላይ…'
+                : competitionLocked
+                  ? 'ተዘግቷል'
+                  : 'ክፍት ነው'}
             </Pill>
           </div>
 
@@ -511,12 +516,14 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
               <span>DEADLINE</span>
 
               <strong>
-                {competitionLocked
-                  ? 'LOCKED'
-                  : timeToDeadline(
-                      competition?.deadlineTime ??
-                        data.gameweek.deadlineTime,
-                    )}
+                {competitionLoading
+                  ? '...'
+                  : competitionLocked
+                    ? 'LOCKED'
+                    : timeToDeadline(
+                        competition?.deadlineTime ??
+                          data.gameweek.deadlineTime,
+                      )}
               </strong>
 
               <small>
@@ -561,17 +568,18 @@ function HomePage({ data }: { data: MiniAppBootstrap }) {
             className="button button-hero"
             data-testid="button-start-team"
           >
-            {competitionLocked
-              ? 'ውድድሩን እይ'
-              : isRegistered
-                ? 'ቡድኔን እይ'
-                : 'ወደ ውድድሩ ግባ'}
+            {competitionLoading
+              ? 'በመጫን ላይ…'
+              : competitionLocked
+                ? 'ውድድሩን እይ'
+                : isRegistered
+                  ? 'ቡድኔን እይ'
+                  : 'ወደ ውድድሩ ግባ'}
 
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>
-
       <section className="stat-grid">
         <StatTile
           label="ቡድኔ"
