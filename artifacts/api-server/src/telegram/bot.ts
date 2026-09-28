@@ -397,14 +397,25 @@ try {
   return updatedCount;
 }
 
-export async function refreshChallengeScores(challenge: WeeklyChallenge): Promise<number> {
-  if (activeScoreRefresh) return activeScoreRefresh;
+export async function refreshChallengeScores(
+  challenge: WeeklyChallenge,
+): Promise<number> {
+  const gameweek = challenge.gameweek;
+  const activeRefresh = activeScoreRefreshes.get(gameweek);
+
+  if (activeRefresh) {
+    return activeRefresh;
+  }
+
   const refresh = refreshChallengeScoresInternal(challenge);
-  activeScoreRefresh = refresh;
+  activeScoreRefreshes.set(gameweek, refresh);
+
   try {
     return await refresh;
   } finally {
-    if (activeScoreRefresh === refresh) activeScoreRefresh = undefined;
+    if (activeScoreRefreshes.get(gameweek) === refresh) {
+      activeScoreRefreshes.delete(gameweek);
+    }
   }
 }
 
