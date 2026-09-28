@@ -145,10 +145,7 @@ router.get(
       await authenticatedUser(req);
 
       const challenge =
-        await getCurrentChallenge();
-
-      const competition =
-        await ensureGwCompetition(
+        await g| (
           challenge,
         );
 
@@ -159,6 +156,8 @@ router.get(
           competition.gameweek,
         entryFeeEtb:
           competition.entryFeeEtb,
+        prizePoolEtb:
+          competition.prizePoolEtb,
         currency:
           competition.currency,
         status:
