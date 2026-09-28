@@ -738,11 +738,17 @@ export async function markWalletWithdrawalPaid(
   const note = cleanAdminNote(adminNote);
 
   return db.transaction(async (tx) => {
+        await tx.execute(
+      sql`select pg_advisory_xact_lock(
+        hashtext(${`fpl-wallet-withdrawal:${withdrawalId}`})
+      )`,
+    );
+
     await tx.execute(
-  sql`select pg_advisory_xact_lock(
-    hashtext(${`fpl-wallet-payout-reference:${reference}`})
-  )`,
-);
+      sql`select pg_advisory_xact_lock(
+        hashtext(${`fpl-wallet-payout-reference:${reference}`})
+      )`,
+    );
 
     const withdrawal = await tx
       .select()
