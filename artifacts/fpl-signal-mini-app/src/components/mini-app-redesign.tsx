@@ -464,19 +464,34 @@ function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; 
               </small>
             </div>
 
-            <div>
-              <span>PLAYERS</span>
+            
+<div>
+  <span>ENTRY FEE</span>
 
-              <strong>
-                {data.leaderboard.length}
-              </strong>
+  <strong>
+    {competition
+      ? `${competition.entryFeeEtb} ETB`
+      : '—'}
+  </strong>
 
-              <small>
-                የተመዘገቡ ቡድኖች
-              </small>
-            </div>
-          </div>
+  <small>
+    የመግቢያ ክፍያ
+  </small>
+</div>
 
+<div>
+  <span>PRIZE POOL</span>
+
+  <strong>
+    {competition
+      ? `${competition.prizePoolEtb} ETB`
+      : '—'}
+  </strong>
+
+  <small>
+    የሽልማት ገንዘብ
+  </small>
+</div>
           <Link
             href="/challenge"
             className="button button-hero"
