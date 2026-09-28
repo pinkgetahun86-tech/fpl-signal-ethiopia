@@ -112,12 +112,31 @@ type RawLiveElement = {
 
 let snapshot: FplSnapshot | undefined;
 
+/*
+ * Keep one in-flight bootstrap request for the whole process.
+ *
+ * Without this, several Mini App users opening at the same time
+ * can all trigger the same FPL bootstrap request concurrently.
+ */
+let bootstrapRequest: Promise<FplSnapshot> | undefined;
+
 const liveStatsCache = new Map<
   number,
   {
     stats: Map<number, FplLivePlayerStats>;
     loadedAt: number;
   }
+>();
+
+/*
+ * Keep one in-flight live-points request per gameweek.
+ *
+ * This prevents duplicate FPL live requests when multiple users
+ * open the Mini App at the same time.
+ */
+const liveStatsRequests = new Map<
+  number,
+  Promise<Map<number, FplLivePlayerStats>>
 >();
 
 const positionByElementType: Record<number, FplPosition> = {
@@ -184,14 +203,17 @@ function parseDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function loadBootstrap(): Promise<FplSnapshot> {
-  if (
-    snapshot &&
-    Date.now() - snapshot.loadedAt < BOOTSTRAP_CACHE_TTL_MS
-  ) {
-    return snapshot;
-  }
+function hasUsableSnapshot(
+  value: FplSnapshot | undefined,
+): value is FplSnapshot {
+  return Boolean(
+    value &&
+      value.players.length > 0 &&
+      value.gameweeks.length > 0,
+  );
+}
 
+async function fetchBootstrap(): Promise<FplSnapshot> {
   const response = await fetch(FPL_BOOTSTRAP_URL, {
     headers: {
       Accept: "application/json",
@@ -371,6 +393,12 @@ async function loadBootstrap(): Promise<FplSnapshot> {
         )
     : [];
 
+  if (gameweeks.length === 0) {
+    throw new Error(
+      "FPL bootstrap contained no valid gameweeks",
+    );
+  }
+
   players.sort(
     (a, b) =>
       a.position.localeCompare(
@@ -379,7 +407,7 @@ async function loadBootstrap(): Promise<FplSnapshot> {
       a.name.localeCompare(b.name),
   );
 
-  snapshot = {
+  const nextSnapshot: FplSnapshot = {
     players,
     gameweeks,
     loadedAt: Date.now(),
@@ -393,7 +421,52 @@ async function loadBootstrap(): Promise<FplSnapshot> {
     "Loaded live FPL data",
   );
 
-  return snapshot;
+  return nextSnapshot;
+}
+
+async function loadBootstrap(): Promise<FplSnapshot> {
+  if (
+    snapshot &&
+    Date.now() - snapshot.loadedAt <
+      BOOTSTRAP_CACHE_TTL_MS
+  ) {
+    return snapshot;
+  }
+
+  if (bootstrapRequest) {
+    return bootstrapRequest;
+  }
+
+  bootstrapRequest = fetchBootstrap()
+    .then((nextSnapshot) => {
+      snapshot = nextSnapshot;
+      return nextSnapshot;
+    })
+    .catch((error) => {
+      /*
+       * If FPL is temporarily unavailable after we already
+       * have a valid snapshot, keep serving the last known
+       * player/gameweek data instead of breaking the Mini App.
+       */
+      if (hasUsableSnapshot(snapshot)) {
+        logger.warn(
+          {
+            error,
+            loadedAt: snapshot.loadedAt,
+          },
+          "FPL bootstrap unavailable; using stale cached snapshot",
+        );
+
+        return snapshot;
+      }
+
+      throw error;
+    })
+    .finally(() => {
+      bootstrapRequest = undefined;
+    });
+
+  return bootstrapRequest;
 }
 
 export async function getFplPlayers(): Promise<
@@ -451,22 +524,9 @@ export async function getCurrentGameweek(): Promise<
   return selected;
 }
 
-export async function getLiveGameweekStats(
+async function fetchLiveGameweekStats(
   gameweek: number,
-): Promise<
-  Map<number, FplLivePlayerStats>
-> {
-  const cached =
-    liveStatsCache.get(gameweek);
-
-  if (
-    cached &&
-    Date.now() - cached.loadedAt <
-      LIVE_CACHE_TTL_MS
-  ) {
-    return cached.stats;
-  }
-
+): Promise<Map<number, FplLivePlayerStats>> {
   /*
    * FPL may expose the upcoming gameweek as
    * "current" during the gap between gameweeks.
@@ -649,4 +709,71 @@ export async function getLiveGameweekStats(
   );
 
   return stats;
+}
+
+export async function getLiveGameweekStats(
+  gameweek: number,
+): Promise<
+  Map<number, FplLivePlayerStats>
+> {
+  const cached =
+    liveStatsCache.get(gameweek);
+
+  if (
+    cached &&
+    Date.now() - cached.loadedAt <
+      LIVE_CACHE_TTL_MS
+  ) {
+    return cached.stats;
+  }
+
+  const existingRequest =
+    liveStatsRequests.get(gameweek);
+
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request =
+    fetchLiveGameweekStats(gameweek)
+      .catch((error) => {
+        /*
+         * If FPL is temporarily unavailable after
+         * a successful live response, keep the last
+         * known points rather than failing the Mini App.
+         */
+        const stale =
+          liveStatsCache.get(gameweek);
+
+        if (
+          stale &&
+          stale.stats.size > 0
+        ) {
+          logger.warn(
+            {
+              error,
+              gameweek,
+              loadedAt:
+                stale.loadedAt,
+            },
+            "FPL live stats unavailable; using stale cached points",
+          );
+
+          return stale.stats;
+        }
+
+        throw error;
+      })
+      .finally(() => {
+        liveStatsRequests.delete(
+          gameweek,
+        );
+      });
+
+  liveStatsRequests.set(
+    gameweek,
+    request,
+  );
+
+  return request;
 }
