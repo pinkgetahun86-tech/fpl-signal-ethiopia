@@ -356,15 +356,30 @@ function AppShell({ children, data }: { children: ReactNode; data: MiniAppBootst
   );
 }
 
-function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; value: string | number; icon: typeof Activity; tone?: 'mint' | 'gold' | 'blue' }) {
-  return (
-    <div className={cn('stat-tile', `stat-tile-${tone}`)}>
-      <Icon className="stat-icon h-4 w-4" />
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </div>
-  );
-  )}
+function StatTile({
+  label,
+  value,
+  icon: Icon,
+  tone = 'mint',
+}: {
+  label: string;
+  value: string | number;
+  icon: typeof Activity;
+  tone?: 'mint' | 'gold' | 'blue';
+}) {
+  return (
+    <div
+      className={cn(
+        'stat-tile',
+        `stat-tile-${tone}`,
+      )}
+    >
+      <Icon className="stat-icon h-4 w-4" />
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
         function HomePage({ data }: { data: MiniAppBootstrap }) {
   const currentUser = data.leaderboard.find(
     (entry) => entry.isCurrentUser,
