@@ -995,12 +995,27 @@ export async function joinWeeklyChallengeWithWallet(
       throw new Error("ውድድሩ አልተገኘም።");
     }
 
-    if (competition.status !== "open") {
-      throw new Error("የዚህ ሳምንት ውድድር ተዘግቷል።");
-    }
+        if (
+      competition.deadlineTime &&
+      Date.now() >= competition.deadlineTime.getTime()
+    ) {
+      await tx
+        .update(gwCompetitions)
+        .set({
+          status: "locked",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(gwCompetitions.id, competition.id),
+            eq(gwCompetitions.status, "open"),
+          ),
+        );
 
-    if (
-      !Number.isSafeInteger(competition.entryFeeEtb) ||
+      throw new Error(
+        "የዚህ ሳምንት ምዝገባ ጊዜ አልፏል።",
+      );
+    }
       competition.entryFeeEtb <= 0
     ) {
       throw new Error("የመግቢያ ክፍያ አልተዘጋጀም።");
