@@ -412,13 +412,22 @@ export async function refreshChallengeScores(
   const activeRefresh = activeScoreRefreshes.get(gameweek);
 
   if (activeRefresh) {
+  if (!strict) {
     return activeRefresh;
   }
 
-    const refresh = refreshChallengeScoresInternal(
-    challenge,
-    strict,
-  );
+  try {
+    await activeRefresh;
+  } catch {
+    // Strict settlement must retry the refresh itself after
+    // any tolerant background refresh fails.
+  }
+}
+
+const refresh = refreshChallengeScoresInternal(
+  challenge,
+  strict,
+);
   activeScoreRefreshes.set(gameweek, refresh);
 
   try {
