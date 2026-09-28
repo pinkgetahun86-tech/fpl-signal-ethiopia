@@ -170,6 +170,12 @@ export async function createManualTelebirrDeposit(
   const reference = cleanReference(transactionReference);
 
   return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(
+        hashtext(${`fpl-wallet-deposit-reference:${reference}`})
+      )`,
+    );
+
     const wallet = await ensureWallet(tx, user.id);
 
     const duplicate = await tx
@@ -520,7 +526,7 @@ export async function approveWalletWithdrawal(
 
     if (withdrawal.status !== "pending") {
       throw new Error(
-        "ይህ Withdrawal ሊፀድቅ አይቻልም።",
+        "ይህ Withdrawal ሊፀድቅ አይችልም።",
       );
     }
 
