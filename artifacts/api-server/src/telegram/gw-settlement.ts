@@ -91,6 +91,12 @@ async function creditPrizeSettlementTx(
 
   await tx.execute(
   sql`select pg_advisory_xact_lock(
+    hashtext(${`fpl-prize-settlement:${settlement.id}`})
+  )`,
+);
+
+await tx.execute(
+  sql`select pg_advisory_xact_lock(
     hashtext(${`fpl-prize-payout-reference:${cleanPayoutReference}`})
   )`,
 );
