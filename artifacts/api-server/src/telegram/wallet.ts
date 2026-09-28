@@ -991,11 +991,15 @@ export async function joinWeeklyChallengeWithWallet(
       .limit(1)
       .then((rows) => rows[0]);
 
-    if (!competition) {
+        if (!competition) {
       throw new Error("ውድድሩ አልተገኘም።");
     }
 
-        if (
+    if (competition.status !== "open") {
+      throw new Error("የዚህ ሳምንት ውድድር ተዘግቷል።");
+    }
+
+    if (
       competition.deadlineTime &&
       Date.now() >= competition.deadlineTime.getTime()
     ) {
@@ -1016,6 +1020,9 @@ export async function joinWeeklyChallengeWithWallet(
         "የዚህ ሳምንት ምዝገባ ጊዜ አልፏል።",
       );
     }
+
+    if (
+      !Number.isSafeInteger(competition.entryFeeEtb) ||
       competition.entryFeeEtb <= 0
     ) {
       throw new Error("የመግቢያ ክፍያ አልተዘጋጀም።");
