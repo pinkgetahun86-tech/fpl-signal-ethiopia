@@ -387,7 +387,33 @@ function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; 
     isReady && data.team.registered;
 
   const challengeLocked = data.gameweek.locked;
+const [competition, setCompetition] = useState<{
+  entryFeeEtb: number;
+  prizePoolEtb: number;
+  currency: string;
+} | null>(null);
 
+useEffect(() => {
+  let active = true;
+
+  customFetch<{
+    entryFeeEtb: number;
+    prizePoolEtb: number;
+    currency: string;
+  }>('/api/mini-app/competition/current', {
+    responseType: 'json',
+  })
+    .then((result) => {
+      if (active) {
+        setCompetition(result);
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    active = false;
+  };
+}, []);
   return (
     <div className="page-stack">
       <section className="welcome-row">
