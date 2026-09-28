@@ -167,27 +167,45 @@ export async function ensureGwCompetition(
    * while the competition is still eligible.
    */
   const inserted = await db
-    .insert(gwCompetitions)
-    .values({
-      id: challenge.competitionId,
-      gameweek: challenge.gameweek,
-      entryFeeEtb: defaultFee,
-      currency: "ETB",
-      status: challenge.locked
-        ? "locked"
-        : "open",
-      deadlineTime:
-        challenge.deadlineTime,
-    })
-    .returning();
+  .insert(gwCompetitions)
+  .values({
+    id: challenge.competitionId,
+    gameweek: challenge.gameweek,
+    entryFeeEtb: defaultFee,
+    currency: "ETB",
+    status: challenge.locked
+      ? "locked"
+      : "open",
+    deadlineTime:
+      challenge.deadlineTime,
+  })
+  .onConflictDoNothing({
+    target: gwCompetitions.id,
+  })
+  .returning();
 
-  if (!inserted[0]) {
-    throw new Error(
-      "Could not create GW competition",
-    );
-  }
-
+if (inserted[0]) {
   return inserted[0];
+}
+
+const racedCompetition = await db
+  .select()
+  .from(gwCompetitions)
+  .where(
+    eq(
+      gwCompetitions.id,
+      challenge.competitionId,
+    ),
+  )
+  .limit(1);
+
+if (racedCompetition[0]) {
+  return racedCompetition[0];
+}
+
+throw new Error(
+  "Could not create GW competition",
+);
 }
 
 export async function getUserPayment(
