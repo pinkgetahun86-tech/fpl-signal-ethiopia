@@ -56,6 +56,20 @@ type CompetitionFee = {
   deadlineTime?: string | null;
 };
 
+type PrizeSettlement = {
+  id: number;
+  competitionId: string;
+  telegramUserId: number;
+  entryId: number;
+  rank: number;
+  amountEtb: number;
+  status: string;
+  payoutReference?: string | null;
+  paidAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
@@ -109,6 +123,9 @@ export default function AdminPage() {
 
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [settlements, setSettlements] = useState<
+    PrizeSettlement[]
+  >([]);
 
   const [competitionFee, setCompetitionFee] =
     useState<CompetitionFee | null>(null);
@@ -117,10 +134,16 @@ export default function AdminPage() {
   const [loadingFee, setLoadingFee] = useState(false);
   const [savingFee, setSavingFee] = useState(false);
 
-  const [loadingDeposits, setLoadingDeposits] = useState(false);
-  const [loadingWithdrawals, setLoadingWithdrawals] = useState(false);
+  const [loadingDeposits, setLoadingDeposits] =
+    useState(false);
+  const [loadingWithdrawals, setLoadingWithdrawals] =
+    useState(false);
+  const [loadingSettlements, setLoadingSettlements] =
+    useState(false);
 
-  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(
+    null
+  );
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -222,6 +245,38 @@ export default function AdminPage() {
     }
   }, [token]);
 
+  const loadSettlements = useCallback(async () => {
+    if (!token || !competitionFee?.competitionId) return;
+
+    setLoadingSettlements(true);
+
+    try {
+      const response = await customFetch<{
+        competitionId: string;
+        settlements: PrizeSettlement[];
+      }>(
+        `/api/admin/gw/${competitionFee.competitionId}/settlements`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+          responseType: "json",
+        }
+      );
+
+      setSettlements(response.settlements ?? []);
+    } catch (err) {
+      console.error(err);
+      setError(
+        "GW Prize Settlements መረጃን ማምጣት አልተቻለም።"
+      );
+    } finally {
+      setLoadingSettlements(false);
+    }
+  }, [token, competitionFee?.competitionId]);
+
   const refreshAll = useCallback(async () => {
     setError("");
     setSuccess("");
@@ -242,6 +297,20 @@ export default function AdminPage() {
 
     refreshAll();
   }, [loggedIn, token, refreshAll]);
+
+  useEffect(() => {
+    if (!loggedIn || !token || !competitionFee?.competitionId) {
+      setSettlements([]);
+      return;
+    }
+
+    loadSettlements();
+  }, [
+    loggedIn,
+    token,
+    competitionFee?.competitionId,
+    loadSettlements,
+  ]);
 
   const login = () => {
     if (!token.trim()) {
@@ -268,6 +337,7 @@ export default function AdminPage() {
     setLoggedIn(false);
     setDeposits([]);
     setWithdrawals([]);
+    setSettlements([]);
     setCompetitionFee(null);
     setFeeInput("");
     setSuccess("");
@@ -555,8 +625,9 @@ export default function AdminPage() {
         "Telebirr / payout transaction reference ያስገቡ።"
       );
 
-    if (payoutReference === null)
+    if (payoutReference === null) {
       return;
+    }
 
     if (!payoutReference.trim()) {
       setError(
@@ -604,6 +675,68 @@ export default function AdminPage() {
     }
   };
 
+  const markPrizePaid = async (
+    settlement: PrizeSettlement
+  ) => {
+    const payoutReference =
+      window.prompt(
+        `Rank #${settlement.rank} — ${formatAmount(
+          settlement.amountEtb
+        )} Prize payout reference ያስገቡ።`
+      );
+
+    if (payoutReference === null) {
+      return;
+    }
+
+    if (!payoutReference.trim()) {
+      setError(
+        "Prize payout reference ያስገቡ።"
+      );
+      return;
+    }
+
+    setActionId(
+      `settlement-paid-${settlement.id}`
+    );
+    setError("");
+    setSuccess("");
+
+    try {
+      await customFetch(
+        `/api/admin/gw/settlements/${settlement.id}/paid`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            payoutReference:
+              payoutReference.trim(),
+          }),
+          responseType: "json",
+        }
+      );
+
+      setSuccess(
+        `Rank #${settlement.rank} Prize ${formatAmount(
+          settlement.amountEtb
+        )} Paid ተብሎ ተመዝግቧል።`
+      );
+
+      await loadSettlements();
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Prize Settlement Paid ማድረግ አልተቻለም።"
+      );
+    } finally {
+      setActionId(null);
+    }
+  };
+
   if (!loggedIn) {
     return (
       <main className="min-h-screen bg-[#07111f] text-white flex items-center justify-center px-4">
@@ -617,6 +750,7 @@ export default function AdminPage() {
               <h1 className="text-xl font-bold">
                 FPL Signal Admin
               </h1>
+
               <p className="text-sm text-white/50">
                 Admin access
               </p>
@@ -701,6 +835,18 @@ export default function AdminPage() {
         withdrawal.status === "rejected"
     ).length;
 
+  const pendingSettlements =
+    settlements.filter(
+      (settlement) =>
+        settlement.status === "pending"
+    ).length;
+
+  const paidSettlements =
+    settlements.filter(
+      (settlement) =>
+        settlement.status === "paid"
+    ).length;
+
   return (
     <main className="min-h-screen bg-[#07111f] text-white">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
@@ -715,6 +861,7 @@ export default function AdminPage() {
                 <h1 className="text-2xl font-bold">
                   FPL Signal Admin
                 </h1>
+
                 <p className="text-sm text-white/50">
                   Wallet & Competition Administration
                 </p>
@@ -724,11 +871,15 @@ export default function AdminPage() {
 
           <div className="flex gap-2">
             <button
-              onClick={refreshAll}
+              onClick={async () => {
+                await refreshAll();
+                await loadSettlements();
+              }}
               disabled={
                 loadingFee ||
                 loadingDeposits ||
-                loadingWithdrawals
+                loadingWithdrawals ||
+                loadingSettlements
               }
               className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium hover:bg-white/[0.08] disabled:opacity-50"
             >
@@ -736,7 +887,8 @@ export default function AdminPage() {
                 className={`h-4 w-4 ${
                   loadingFee ||
                   loadingDeposits ||
-                  loadingWithdrawals
+                  loadingWithdrawals ||
+                  loadingSettlements
                     ? "animate-spin"
                     : ""
                 }`}
@@ -784,15 +936,13 @@ export default function AdminPage() {
                 <span
                   className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-medium ${
                     competitionFee.locked ||
-                    competitionFee.status !==
-                      "open"
+                    competitionFee.status !== "open"
                       ? "border-red-500/20 bg-red-500/10 text-red-300"
                       : "border-green-500/20 bg-green-500/10 text-green-300"
                   }`}
                 >
                   {competitionFee.locked ||
-                  competitionFee.status !==
-                    "open"
+                  competitionFee.status !== "open"
                     ? "Locked"
                     : "Open"}
                 </span>
@@ -859,13 +1009,10 @@ export default function AdminPage() {
                     disabled={
                       savingFee ||
                       competitionFee.locked ||
-                      competitionFee.status !==
-                        "open"
+                      competitionFee.status !== "open"
                     }
                     onChange={(event) =>
-                      setFeeInput(
-                        event.target.value
-                      )
+                      setFeeInput(event.target.value)
                     }
                     className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-white/30 disabled:opacity-50 sm:max-w-xs"
                   />
@@ -875,8 +1022,7 @@ export default function AdminPage() {
                     disabled={
                       savingFee ||
                       competitionFee.locked ||
-                      competitionFee.status !==
-                        "open"
+                      competitionFee.status !== "open"
                     }
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -956,125 +1102,240 @@ export default function AdminPage() {
                 <table className="w-full min-w-[950px] text-sm">
                   <thead className="border-b border-white/10 bg-white/[0.03]">
                     <tr className="text-left text-white/50">
-                      <th className="px-4 py-3">
-                        Status
-                      </th>
-                      <th className="px-4 py-3">
-                        Telegram User
-                      </th>
-                      <th className="px-4 py-3">
-                        Method
-                      </th>
-                      <th className="px-4 py-3">
-                        Amount
-                      </th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Telegram User</th>
+                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-3">Amount</th>
                       <th className="px-4 py-3">
                         Transaction Ref
                       </th>
-                      <th className="px-4 py-3">
-                        Created
-                      </th>
-                      <th className="px-4 py-3">
-                        Action
-                      </th>
+                      <th className="px-4 py-3">Created</th>
+                      <th className="px-4 py-3">Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {deposits.map(
-                      (deposit) => (
-                        <tr
-                          key={deposit.id}
-                          className="border-b border-white/5 last:border-0"
-                        >
-                          <td className="px-4 py-4">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
-                                deposit.status
-                              )}`}
-                            >
-                              {deposit.status ??
-                                "-"}
-                            </span>
-                          </td>
+                    {deposits.map((deposit) => (
+                      <tr
+                        key={deposit.id}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
+                              deposit.status
+                            )}`}
+                          >
+                            {deposit.status ?? "-"}
+                          </span>
+                        </td>
 
-                          <td className="px-4 py-4">
-                            <div className="font-medium">
-                              {deposit.telegramUserId ??
-                                "-"}
+                        <td className="px-4 py-4">
+                          <div className="font-medium">
+                            {deposit.telegramUserId ?? "-"}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {methodLabel(deposit.method)}
+                        </td>
+
+                        <td className="px-4 py-4 font-bold">
+                          {formatAmount(deposit.amountEtb)}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span className="break-all text-white/70">
+                            {deposit.transactionReference ?? "-"}
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-4 text-white/60">
+                          {formatDate(deposit.createdAt)}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {deposit.status === "pending" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() =>
+                                  approveDeposit(deposit)
+                                }
+                                disabled={actionId !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Approve
+                              </button>
+
+                              <button
+                                onClick={() =>
+                                  rejectDeposit(deposit)
+                                }
+                                disabled={actionId !== null}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Reject
+                              </button>
                             </div>
-                          </td>
-
-                          <td className="px-4 py-4">
-                            {methodLabel(
-                              deposit.method
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4 font-bold">
-                            {formatAmount(
-                              deposit.amountEtb
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <span className="break-all text-white/70">
-                              {deposit.transactionReference ??
-                                "-"}
+                          ) : (
+                            <span className="text-xs text-white/30">
+                              No action
                             </span>
-                          </td>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
 
-                          <td className="px-4 py-4 whitespace-nowrap text-white/60">
-                            {formatDate(
-                              deposit.createdAt
-                            )}
-                          </td>
+        {/* GW PRIZE SETTLEMENTS */}
+        <section className="mb-8">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold">
+                GW Prize Settlements
+              </h2>
 
-                          <td className="px-4 py-4">
-                            {deposit.status ===
-                            "pending" ? (
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  onClick={() =>
-                                    approveDeposit(
-                                      deposit
-                                    )
-                                  }
-                                  disabled={
-                                    actionId !==
-                                    null
-                                  }
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
-                                >
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  Approve
-                                </button>
+              <p className="text-sm text-white/50">
+                Top 20 prize settlement records and wallet payout status.
+              </p>
+            </div>
 
-                                <button
-                                  onClick={() =>
-                                    rejectDeposit(
-                                      deposit
-                                    )
-                                  }
-                                  disabled={
-                                    actionId !==
-                                    null
-                                  }
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                  Reject
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-white/30">
-                                No action
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    )}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-yellow-300/70">
+                  Pending
+                </div>
+
+                <div className="text-lg font-bold text-yellow-300">
+                  {pendingSettlements}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 px-3 py-2 text-center">
+                <div className="text-xs text-green-300/70">
+                  Paid
+                </div>
+
+                <div className="text-lg font-bold text-green-300">
+                  {paidSettlements}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+            {loadingSettlements ? (
+              <div className="flex items-center justify-center gap-2 p-10 text-white/50">
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                Prize Settlements በመጫን ላይ...
+              </div>
+            ) : settlements.length === 0 ? (
+              <div className="p-10 text-center text-white/40">
+                GW Prize Settlements የሉም።
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1050px] text-sm">
+                  <thead className="border-b border-white/10 bg-white/[0.03]">
+                    <tr className="text-left text-white/50">
+                      <th className="px-4 py-3">Rank</th>
+                      <th className="px-4 py-3">
+                        Telegram User
+                      </th>
+                      <th className="px-4 py-3">Entry</th>
+                      <th className="px-4 py-3">Prize</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">
+                        Payout Ref
+                      </th>
+                      <th className="px-4 py-3">Paid At</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {settlements.map((settlement) => (
+                      <tr
+                        key={settlement.id}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-4">
+                          <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2 font-bold text-yellow-300">
+                            #{settlement.rank}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="font-medium">
+                            {settlement.telegramUserId}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4 text-white/60">
+                          #{settlement.entryId}
+                        </td>
+
+                        <td className="px-4 py-4 font-bold">
+                          {formatAmount(
+                            settlement.amountEtb
+                          )}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
+                              settlement.status
+                            )}`}
+                          >
+                            {settlement.status}
+                          </span>
+                        </td>
+
+                        <td className="max-w-[220px] break-all px-4 py-4 text-white/60">
+                          {settlement.payoutReference ?? "-"}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-4 text-white/60">
+                          {formatDate(settlement.paidAt)}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {settlement.status === "pending" ? (
+                            <button
+                              onClick={() =>
+                                markPrizePaid(settlement)
+                              }
+                              disabled={actionId !== null}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                            >
+                              {actionId ===
+                              `settlement-paid-${settlement.id}` ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                              )}
+                              Mark Paid
+                            </button>
+                          ) : settlement.status === "paid" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-green-300">
+                              <CheckCircle2 className="h-4 w-4" />
+                              Paid
+                            </span>
+                          ) : (
+                            <span className="text-xs text-white/40">
+                              {settlement.status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1153,161 +1414,139 @@ export default function AdminPage() {
                 <table className="w-full min-w-[950px] text-sm">
                   <thead className="border-b border-white/10 bg-white/[0.03]">
                     <tr className="text-left text-white/50">
-                      <th className="px-4 py-3">
-                        Status
-                      </th>
+                      <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">
                         Telegram User
                       </th>
-                      <th className="px-4 py-3">
-                        Method
-                      </th>
-                      <th className="px-4 py-3">
-                        Amount
-                      </th>
+                      <th className="px-4 py-3">Method</th>
+                      <th className="px-4 py-3">Amount</th>
                       <th className="px-4 py-3">
                         Payout Ref
                       </th>
-                      <th className="px-4 py-3">
-                        Created
-                      </th>
-                      <th className="px-4 py-3">
-                        Action
-                      </th>
+                      <th className="px-4 py-3">Created</th>
+                      <th className="px-4 py-3">Action</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {withdrawals.map(
-                      (withdrawal) => (
-                        <tr
-                          key={withdrawal.id}
-                          className="border-b border-white/5 last:border-0"
-                        >
-                          <td className="px-4 py-4">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
-                                withdrawal.status
-                              )}`}
-                            >
-                              {withdrawal.status ??
-                                "-"}
-                            </span>
-                          </td>
+                    {withdrawals.map((withdrawal) => (
+                      <tr
+                        key={withdrawal.id}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusClass(
+                              withdrawal.status
+                            )}`}
+                          >
+                            {withdrawal.status ?? "-"}
+                          </span>
+                        </td>
 
-                          <td className="px-4 py-4">
-                            {withdrawal.telegramUserId ??
-                              "-"}
-                          </td>
+                        <td className="px-4 py-4">
+                          {withdrawal.telegramUserId ?? "-"}
+                        </td>
 
-                          <td className="px-4 py-4">
-                            {methodLabel(
-                              withdrawal.method
-                            )}
-                          </td>
+                        <td className="px-4 py-4">
+                          {methodLabel(withdrawal.method)}
+                        </td>
 
-                          <td className="px-4 py-4 font-bold">
-                            {formatAmount(
-                              withdrawal.amountEtb
-                            )}
-                          </td>
+                        <td className="px-4 py-4 font-bold">
+                          {formatAmount(
+                            withdrawal.amountEtb
+                          )}
+                        </td>
 
-                          <td className="px-4 py-4 text-white/60">
-                            {withdrawal.payoutReference ??
-                              "-"}
-                          </td>
+                        <td className="px-4 py-4 text-white/60">
+                          {withdrawal.payoutReference ?? "-"}
+                        </td>
 
-                          <td className="px-4 py-4 whitespace-nowrap text-white/60">
-                            {formatDate(
-                              withdrawal.createdAt
-                            )}
-                          </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-white/60">
+                          {formatDate(withdrawal.createdAt)}
+                        </td>
 
-                          <td className="px-4 py-4">
-                            <div className="flex flex-wrap gap-2">
-                              {withdrawal.status ===
-                                "pending" && (
-                                <>
-                                  <button
-                                    onClick={() =>
-                                      approveWithdrawal(
-                                        withdrawal
-                                      )
-                                    }
-                                    disabled={
-                                      actionId !==
-                                      null
-                                    }
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/25 disabled:opacity-50"
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Approve
-                                  </button>
-
-                                  <button
-                                    onClick={() =>
-                                      rejectWithdrawal(
-                                        withdrawal
-                                      )
-                                    }
-                                    disabled={
-                                      actionId !==
-                                      null
-                                    }
-                                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
-                                  >
-                                    <XCircle className="h-4 w-4" />
-                                    Reject
-                                  </button>
-                                </>
-                              )}
-
-                              {withdrawal.status ===
-                                "approved" && (
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            {withdrawal.status ===
+                              "pending" && (
+                              <>
                                 <button
                                   onClick={() =>
-                                    markWithdrawalPaid(
+                                    approveWithdrawal(
                                       withdrawal
                                     )
                                   }
                                   disabled={
-                                    actionId !==
-                                    null
+                                    actionId !== null
                                   }
-                                  className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/25 disabled:opacity-50"
                                 >
                                   <CheckCircle2 className="h-4 w-4" />
-                                  Mark Paid
+                                  Approve
                                 </button>
-                              )}
 
-                              {withdrawal.status ===
-                                "paid" && (
-                                <span className="inline-flex items-center gap-1.5 text-xs text-green-300">
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  Paid
-                                </span>
-                              )}
-
-                              {withdrawal.status ===
-                                "rejected" && (
-                                <span className="inline-flex items-center gap-1.5 text-xs text-red-300">
+                                <button
+                                  onClick={() =>
+                                    rejectWithdrawal(
+                                      withdrawal
+                                    )
+                                  }
+                                  disabled={
+                                    actionId !== null
+                                  }
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 hover:bg-red-500/25 disabled:opacity-50"
+                                >
                                   <XCircle className="h-4 w-4" />
-                                  Rejected
-                                </span>
-                              )}
+                                  Reject
+                                </button>
+                              </>
+                            )}
 
-                              {!withdrawal.status && (
-                                <span className="inline-flex items-center gap-1.5 text-xs text-white/40">
-                                  <Clock3 className="h-4 w-4" />
-                                  Unknown
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    )}
+                            {withdrawal.status ===
+                              "approved" && (
+                              <button
+                                onClick={() =>
+                                  markWithdrawalPaid(
+                                    withdrawal
+                                  )
+                                }
+                                disabled={
+                                  actionId !== null
+                                }
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-green-500/15 px-3 py-2 text-xs font-semibold text-green-300 hover:bg-green-500/25 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Mark Paid
+                              </button>
+                            )}
+
+                            {withdrawal.status ===
+                              "paid" && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-green-300">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Paid
+                              </span>
+                            )}
+
+                            {withdrawal.status ===
+                              "rejected" && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-red-300">
+                                <XCircle className="h-4 w-4" />
+                                Rejected
+                              </span>
+                            )}
+
+                            {!withdrawal.status && (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-white/40">
+                                <Clock3 className="h-4 w-4" />
+                                Unknown
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
