@@ -381,7 +381,7 @@ export async function finalizeCompetition(
    * after this refresh has completed.
    */
   await refreshChallengeScores({
-    competitionId: competition.competitionId,
+    competitionId: competition.id,
     gameweek: competition.gameweek,
     deadlineTime: competition.deadlineTime,
     locked: true,
