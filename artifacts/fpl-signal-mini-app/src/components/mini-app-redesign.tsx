@@ -519,19 +519,7 @@ useEffect(() => {
             </div>
           </div>
 
-          <Link
-            href="/challenge"
-            className="button button-hero"
-            data-testid="button-start-team"
-          >
-            {challengeLocked
-              ? 'ውድድሩን እይ'
-              : isRegistered
-                ? 'ቡድኔን እይ'
-                : 'ወደ ውድድሩ ግባ'}
-
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+                    <Link
             href="/challenge"
             className="button button-hero"
             data-testid="button-start-team"
