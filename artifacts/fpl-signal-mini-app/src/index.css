@@ -419,3 +419,70 @@ button:disabled { cursor: not-allowed; }
   .payment-card .button { width: 100%; }
   .role-summary { grid-template-columns: 1fr; }
 }
+/* Home Page competition-first responsive tuning */
+
+.hero-stats {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: auto;
+  padding: 18px 0 16px;
+}
+
+.hero-stats > div {
+  min-width: 0;
+  padding: 11px 10px;
+  border: 1px solid rgba(164, 188, 204, .12);
+  border-radius: 13px;
+  background: rgba(8, 17, 30, .22);
+}
+
+.hero-stats strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.button-hero {
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (max-width: 520px) {
+  .hero-content {
+    padding: 20px 16px 16px;
+  }
+
+  .hero-content h2 {
+    margin-top: 27px;
+    font-size: 42px;
+  }
+
+  .hero-description {
+    max-width: 100%;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 14px;
+  }
+
+  .hero-stats > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .hero-stats > div {
+    padding: 10px 9px;
+  }
+
+  .hero-stats strong {
+    font-size: 15px;
+  }
+
+  .hero-stats span,
+  .hero-stats small {
+    font-size: 8px;
+  }
+}
