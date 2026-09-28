@@ -52,7 +52,9 @@ function acquirePoolClient() {
   return pool.connect();
 }
 
-let botLockClient: BotLockClient | undefined;
+let botLockClient: Awaited<
+  ReturnType<typeof acquirePoolClient>
+> | undefined;
 let botLockRetryTimer: ReturnType<typeof setInterval> | undefined;
 let scoreRefreshTimer: ReturnType<typeof setInterval> | undefined;
 const activeScoreRefreshes = new Map<number, Promise<number>>();
@@ -1411,7 +1413,9 @@ const TELEGRAM_POLLING_LOCK_KEY = 72139041;
 
 async function tryBecomeBotLeader(): Promise<boolean> {
   if (botLeader) return true;
-  let client: BotLockClient | undefined;
+  let client: Awaited<
+  ReturnType<typeof acquirePoolClient>
+> | undefined;
   try {
     client = await acquirePoolClient();
     const result = await client.query<{ locked: boolean }>(
