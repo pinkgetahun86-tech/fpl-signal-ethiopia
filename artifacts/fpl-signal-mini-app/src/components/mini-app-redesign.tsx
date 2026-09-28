@@ -380,7 +380,8 @@ function StatTile({
     </div>
   );
 }
-        function HomePage({ data }: { data: MiniAppBootstrap }) {
+
+function HomePage({ data }: { data: MiniAppBootstrap }) {
   const currentUser = data.leaderboard.find(
     (entry) => entry.isCurrentUser,
   );
