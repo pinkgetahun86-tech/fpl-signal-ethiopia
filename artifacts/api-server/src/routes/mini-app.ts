@@ -629,14 +629,14 @@ router.post(
 
       return res.status(201).json({
         withdrawal: {
-          id: withdrawal.withdrawal.id,
-          method: withdrawal.withdrawal.method,
-          amountEtb: withdrawal.withdrawal.amountEtb,
-          destination: withdrawal.withdrawal.destination,
-          status: withdrawal.withdrawal.status,
-          createdAt:
-            withdrawal.withdrawal.createdAt.toISOString(),
-        },
+  id: withdrawal.withdrawal.id,
+  method: withdrawal.withdrawal.method,
+  amountEtb: withdrawal.withdrawal.amountEtb,
+  destination: withdrawal.withdrawal.destination,
+  status: withdrawal.withdrawal.status,
+  createdAt:
+    withdrawal.withdrawal.createdAt.toISOString(),
+},
         wallet: {
           balanceEtb: wallet.balanceEtb,
           currency: "ETB",
