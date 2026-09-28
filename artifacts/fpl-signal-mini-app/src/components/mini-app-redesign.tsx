@@ -364,8 +364,8 @@ function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; 
       <span>{label}</span>
     </div>
   );
-}
-   function HomePage({ data }: { data: MiniAppBootstrap }) {
+  )}
+        function HomePage({ data }: { data: MiniAppBootstrap }) {
   const currentUser = data.leaderboard.find(
     (entry) => entry.isCurrentUser,
   );
@@ -386,34 +386,51 @@ function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; 
   const isRegistered =
     isReady && data.team.registered;
 
-  const challengeLocked = data.gameweek.locked;
-const [competition, setCompetition] = useState<{
-  entryFeeEtb: number;
-  prizePoolEtb: number;
-  currency: string;
-} | null>(null);
+  const challengeLocked =
+    data.gameweek.locked;
 
-useEffect(() => {
-  let active = true;
-
-  customFetch<{
+  const [competition, setCompetition] = useState<{
     entryFeeEtb: number;
     prizePoolEtb: number;
     currency: string;
-  }>('/api/mini-app/competition/current', {
-    responseType: 'json',
-  })
-    .then((result) => {
-      if (active) {
-        setCompetition(result);
-      }
-    })
-    .catch(() => {});
+    status: string;
+    locked: boolean;
+    deadlineTime: string | null;
+  } | null>(null);
 
-  return () => {
-    active = false;
-  };
-}, []);
+  const competitionLocked =
+    challengeLocked ||
+    competition?.locked === true ||
+    competition?.status !== 'open';
+
+  useEffect(() => {
+    let active = true;
+
+    customFetch<{
+      entryFeeEtb: number;
+      prizePoolEtb: number;
+      currency: string;
+      status: string;
+      locked: boolean;
+      deadlineTime: string | null;
+    }>('/api/mini-app/competition/current', {
+      responseType: 'json',
+    })
+      .then((result) => {
+        if (active) {
+          setCompetition(result);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const competitionLoading =
+    competition === null;
+
   return (
     <div className="page-stack">
       <section className="welcome-row">
@@ -433,7 +450,9 @@ useEffect(() => {
 
         <div className="live-dot">
           <span />
-          {challengeLocked ? 'ዝግ' : 'ቀጥታ'}
+          {competitionLocked
+            ? 'ዝግ'
+            : 'ቀጥታ'}
         </div>
       </section>
 
@@ -450,12 +469,12 @@ useEffect(() => {
 
             <Pill
               tone={
-                challengeLocked
+                competitionLocked
                   ? 'gold'
                   : 'mint'
               }
             >
-              {challengeLocked
+              {competitionLocked
                 ? 'ተዘግቷል'
                 : 'ክፍት ነው'}
             </Pill>
@@ -471,21 +490,23 @@ useEffect(() => {
             ይወዳደሩ።
           </p>
 
-                    <div className="hero-stats">
+          <div className="hero-stats">
             <div>
               <span>DEADLINE</span>
 
               <strong>
-                {challengeLocked
+                {competitionLocked
                   ? 'LOCKED'
                   : timeToDeadline(
-                      data.gameweek.deadlineTime,
+                      competition?.deadlineTime ??
+                        data.gameweek.deadlineTime,
                     )}
               </strong>
 
               <small>
                 {formatDate(
-                  data.gameweek.deadlineTime,
+                  competition?.deadlineTime ??
+                    data.gameweek.deadlineTime,
                 )}
               </small>
             </div>
@@ -494,9 +515,9 @@ useEffect(() => {
               <span>ENTRY FEE</span>
 
               <strong>
-                {competition
-                  ? `${competition.entryFeeEtb} ETB`
-                  : '—'}
+                {competitionLoading
+                  ? '...'
+                  : `${competition.entryFeeEtb} ETB`}
               </strong>
 
               <small>
@@ -508,9 +529,9 @@ useEffect(() => {
               <span>PRIZE POOL</span>
 
               <strong>
-                {competition
-                  ? `${competition.prizePoolEtb} ETB`
-                  : '—'}
+                {competitionLoading
+                  ? '...'
+                  : `${competition.prizePoolEtb} ETB`}
               </strong>
 
               <small>
@@ -519,12 +540,12 @@ useEffect(() => {
             </div>
           </div>
 
-                    <Link
+          <Link
             href="/challenge"
             className="button button-hero"
             data-testid="button-start-team"
           >
-            {challengeLocked
+            {competitionLocked
               ? 'ውድድሩን እይ'
               : isRegistered
                 ? 'ቡድኔን እይ'
@@ -660,7 +681,7 @@ useEffect(() => {
             href="/challenge"
             className="button button-primary button-small"
           >
-            {challengeLocked
+            {competitionLocked
               ? 'ቡድኔን እይ'
               : isRegistered
                 ? 'ዝርዝሩን እይ'
@@ -690,7 +711,7 @@ useEffect(() => {
       </section>
     </div>
   );
-}
+}      
 function PlayerCard({
   player,
   selected,
