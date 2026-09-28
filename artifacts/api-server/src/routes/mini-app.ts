@@ -510,13 +510,16 @@ router.post(
           deposit.method,
       });
     } catch (error) {
-      const status =
+            const status =
         error instanceof MiniAppAuthError
           ? error.status
           : error instanceof MiniAppRequestError
             ? error.status
-            : 503;
-
+            : error instanceof Error &&
+                error.message ===
+                  "ይህ የTelebirr ግብይት መለያ አስቀድሞ ተጠቅመዋል።"
+              ? 409
+              : 503;
       return res.status(status).json({
         error: errorMessage(error),
       });
