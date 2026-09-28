@@ -380,12 +380,15 @@ export async function finalizeCompetition(
    * The settlement transaction below re-reads the entries
    * after this refresh has completed.
    */
-  await refreshChallengeScores({
+  await refreshChallengeScores(
+  {
     competitionId: competition.id,
     gameweek: competition.gameweek,
     deadlineTime: competition.deadlineTime,
     locked: true,
-  });
+  },
+  true,
+);
 
   await db.transaction(async (tx) => {
     await tx.execute(
