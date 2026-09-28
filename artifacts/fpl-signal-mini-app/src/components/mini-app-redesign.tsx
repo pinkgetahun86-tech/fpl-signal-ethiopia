@@ -365,75 +365,290 @@ function StatTile({ label, value, icon: Icon, tone = 'mint' }: { label: string; 
     </div>
   );
 }
+   function HomePage({ data }: { data: MiniAppBootstrap }) {
+  const currentUser = data.leaderboard.find(
+    (entry) => entry.isCurrentUser,
+  );
 
-function HomePage({ data }: { data: MiniAppBootstrap }) {
-  const currentUser = data.leaderboard.find((entry) => entry.isCurrentUser);
-  const teamCount = data.team.selectedPlayerIds.length;
-  const isReady = teamCount === 15 && data.team.startingPlayerIds.length === 11 && !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId;
+  const teamCount = data.team.selectedPlayerIds.length;
+  const starterCount =
+    data.team.startingPlayerIds.length;
 
-  return (
-    <div className="page-stack">
-      <section className="welcome-row">
-        <div>
-          <p className="eyebrow">FPL SIGNAL ETHIOPIA</p>
-          <h1>ሰላም፣ {data.user.firstName || 'ጓደኛ'} 👋</h1>
-          <p className="muted-copy">የዚህን ሳምንት ቡድንዎን እንገንባ።</p>
-        </div>
-        <div className="live-dot"><span /> ቀጥታ</div>
-      </section>
+  const hasCaptains =
+    !!data.team.captainPlayerId &&
+    !!data.team.viceCaptainPlayerId;
 
-      <section className="challenge-hero">
-        <div className="hero-orb hero-orb-one" />
-        <div className="hero-orb hero-orb-two" />
-        <div className="hero-content">
-          <div className="hero-topline">
-            <span className="hero-kicker"><Sparkles className="h-3.5 w-3.5" /> የሳምንቱ ውድድር</span>
-            <Pill tone={data.gameweek.locked ? 'gold' : 'mint'}>{data.gameweek.locked ? 'ተዘግቷል' : 'ክፍት ነው'}</Pill>
-          </div>
-          <h2>ሳምንት {data.gameweek.id}</h2>
-          <p className="hero-description">ቡድንዎን ይምረጡ፣ ቋሚ 11ዎን ያዘጋጁ፣ ይወዳደሩ።</p>
-          <div className="hero-stats">
-            <div><span>የመጨረሻ ጊዜ</span><strong>{data.gameweek.locked ? 'ተዘግቷል' : timeToDeadline(data.gameweek.deadlineTime)}</strong><small>{formatDate(data.gameweek.deadlineTime)}</small></div>
-            <div><span>ተሳታፊዎች</span><strong>{data.leaderboard.length}</strong><small>የተመዘገቡ ቡድኖች</small></div>
-          </div>
-          <Link href="/challenge" className="button button-hero" data-testid="button-start-team">{data.gameweek.locked ? 'የእኔን ቡድን እይ' : 'ቡድኔን እመርጣለሁ'}<ArrowRight className="h-4 w-4" /></Link>
-        </div>
-      </section>
+  const isReady =
+    teamCount === 15 &&
+    starterCount === 11 &&
+    hasCaptains;
 
-      <section className="stat-grid">
-        <StatTile label="ቡድኔ" value={`${teamCount}/15`} icon={Users} />
-        <StatTile label="ነጥብ" value={data.team.points} icon={Zap} tone="gold" />
-        <StatTile label="ደረጃ" value={currentUser ? `#${currentUser.rank}` : '—'} icon={Trophy} tone="blue" />
-      </section>
+  const isRegistered =
+    isReady && data.team.registered;
 
-      <section className="simple-card">
-        <div className="card-heading"><div><p className="eyebrow">የሚቀጥለው እርምጃ</p><h2>ቡድንዎን ያጠናቅቁ</h2></div><Target className="heading-icon" /></div>
-        <div className="step-list">
-          {(
-            [
-              ['01', '15 ተጫዋቾች ይምረጡ', teamCount === 15],
-              ['02', 'ቋሚ 11 ያዘጋጁ', data.team.startingPlayerIds.length === 11],
-              ['03', 'ካፒቴን እና ምክትል ይምረጡ', !!data.team.captainPlayerId && !!data.team.viceCaptainPlayerId],
-              ['04', 'ቡድንዎን ያረጋግጡ', isReady && data.team.registered],
-            ] as Array<[string, string, boolean]>
-          ).map(([number, label, complete]) => (
-            <div key={number} className={cn('step-row', complete && 'step-row-complete')}>
-              <span className="step-number">{complete ? <Check className="h-4 w-4" /> : number}</span>
-              <span>{label}</span>
-              {complete ? <span className="step-status">ተጠናቋል</span> : <ChevronRight className="ml-auto h-4 w-4" />}
-            </div>
-          ))}
-        </div>
-      </section>
+  const challengeLocked = data.gameweek.locked;
 
-      <section className="tip-card">
-        <div className="tip-icon"><ShieldCheck className="h-5 w-5" /></div>
-        <div><strong>ኦፊሴላዊ የFPL መረጃ</strong><p>ነጥቦችና የተጫዋቾች መረጃ ከFPL ቀጥታ ምንጭ ብቻ ይመጣሉ።</p></div>
-      </section>
-    </div>
-  );
+  return (
+    <div className="page-stack">
+      <section className="welcome-row">
+        <div>
+          <p className="eyebrow">
+            FPL SIGNAL ETHIOPIA
+          </p>
+
+          <h1>
+            ሰላም፣ {data.user.firstName || 'ጓደኛ'} 👋
+          </h1>
+
+          <p className="muted-copy">
+            የሳምንቱን ውድድር እንጀምር።
+          </p>
+        </div>
+
+        <div className="live-dot">
+          <span />
+          {challengeLocked ? 'ዝግ' : 'ቀጥታ'}
+        </div>
+      </section>
+
+      <section className="challenge-hero">
+        <div className="hero-orb hero-orb-one" />
+        <div className="hero-orb hero-orb-two" />
+
+        <div className="hero-content">
+          <div className="hero-topline">
+            <span className="hero-kicker">
+              <Trophy className="h-3.5 w-3.5" />
+              WEEKLY CHALLENGE
+            </span>
+
+            <Pill
+              tone={
+                challengeLocked
+                  ? 'gold'
+                  : 'mint'
+              }
+            >
+              {challengeLocked
+                ? 'ተዘግቷል'
+                : 'ክፍት ነው'}
+            </Pill>
+          </div>
+
+          <h2>
+            GW {data.gameweek.id}
+          </h2>
+
+          <p className="hero-description">
+            ቡድንዎን ያዘጋጁ፣ ካፒቴንዎን
+            ይምረጡ፣ ከሌሎች ተጫዋቾች ጋር
+            ይወዳደሩ።
+          </p>
+
+          <div className="hero-stats">
+            <div>
+              <span>DEADLINE</span>
+
+              <strong>
+                {challengeLocked
+                  ? 'LOCKED'
+                  : timeToDeadline(
+                      data.gameweek.deadlineTime,
+                    )}
+              </strong>
+
+              <small>
+                {formatDate(
+                  data.gameweek.deadlineTime,
+                )}
+              </small>
+            </div>
+
+            <div>
+              <span>PLAYERS</span>
+
+              <strong>
+                {data.leaderboard.length}
+              </strong>
+
+              <small>
+                የተመዘገቡ ቡድኖች
+              </small>
+            </div>
+          </div>
+
+          <Link
+            href="/challenge"
+            className="button button-hero"
+            data-testid="button-start-team"
+          >
+            {challengeLocked
+              ? 'ውድድሩን እይ'
+              : isRegistered
+                ? 'ቡድኔን እይ'
+                : 'ወደ ውድድሩ ግባ'}
+
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      <section className="stat-grid">
+        <StatTile
+          label="ቡድኔ"
+          value={`${teamCount}/15`}
+          icon={Users}
+        />
+
+        <StatTile
+          label="ነጥብ"
+          value={data.team.points}
+          icon={Zap}
+          tone="gold"
+        />
+
+        <StatTile
+          label="ደረጃ"
+          value={
+            currentUser
+              ? `#${currentUser.rank}`
+              : '—'
+          }
+          icon={Trophy}
+          tone="blue"
+        />
+      </section>
+
+      <section className="simple-card">
+        <div className="card-heading">
+          <div>
+            <p className="eyebrow">
+              MY TEAM
+            </p>
+
+            <h2>
+              {isRegistered
+                ? 'ቡድንዎ ዝግጁ ነው'
+                : 'ቡድንዎን ያጠናቅቁ'}
+            </h2>
+          </div>
+
+          {isRegistered ? (
+            <Check className="heading-icon" />
+          ) : (
+            <Target className="heading-icon" />
+          )}
+        </div>
+
+        <div className="step-list">
+          {(
+            [
+              [
+                '01',
+                '15 ተጫዋቾች ይምረጡ',
+                teamCount === 15,
+              ],
+              [
+                '02',
+                'ቋሚ 11 ያዘጋጁ',
+                starterCount === 11,
+              ],
+              [
+                '03',
+                'ካፒቴን እና ምክትል ይምረጡ',
+                hasCaptains,
+              ],
+              [
+                '04',
+                'ቡድንዎን ያረጋግጡ',
+                isRegistered,
+              ],
+            ] as Array<
+              [string, string, boolean]
+            >
+          ).map(
+            ([
+              number,
+              label,
+              complete,
+            ]) => (
+              <div
+                key={number}
+                className={cn(
+                  'step-row',
+                  complete &&
+                    'step-row-complete',
+                )}
+              >
+                <span className="step-number">
+                  {complete ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    number
+                  )}
+                </span>
+
+                <span>{label}</span>
+
+                {complete ? (
+                  <span className="step-status">
+                    ተጠናቋል
+                  </span>
+                ) : (
+                  <ChevronRight className="ml-auto h-4 w-4" />
+                )}
+              </div>
+            ),
+          )}
+        </div>
+
+        <div
+          className="builder-footer"
+          style={{
+            marginTop: '12px',
+          }}
+        >
+          <span>
+            {isRegistered
+              ? 'የውድድር ቡድንዎ ተዘጋጅቷል።'
+              : `${teamCount}/15 ተጫዋቾች ተመርጠዋል።`}
+          </span>
+
+          <Link
+            href="/challenge"
+            className="button button-primary button-small"
+          >
+            {challengeLocked
+              ? 'ቡድኔን እይ'
+              : isRegistered
+                ? 'ዝርዝሩን እይ'
+                : 'ቡድኔን አዘጋጅ'}
+
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </section>
+
+      <section className="tip-card">
+        <div className="tip-icon">
+          <ShieldCheck className="h-5 w-5" />
+        </div>
+
+        <div>
+          <strong>
+            DATA • STRATEGY • SIGNAL
+          </strong>
+
+          <p>
+            የFPL ነጥቦችና የተጫዋቾች
+            መረጃ በኦፊሴላዊ የFPL ምንጭ
+            ላይ የተመሰረተ ነው።
+          </p>
+        </div>
+      </section>
+    </div>
+  );
 }
-
 function PlayerCard({
   player,
   selected,
