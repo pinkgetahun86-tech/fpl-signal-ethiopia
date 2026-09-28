@@ -739,10 +739,10 @@ export async function markWalletWithdrawalPaid(
 
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(
-        hashtext(${`fpl-wallet-withdrawal:${withdrawalId}`})
-      )`,
-    );
+  sql`select pg_advisory_xact_lock(
+    hashtext(${`fpl-wallet-payout-reference:${reference}`})
+  )`,
+);
 
     const withdrawal = await tx
       .select()
