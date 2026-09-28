@@ -369,6 +369,24 @@ export async function finalizeCompetition(
     );
   }
 
+  /*
+   * Refresh the final FPL scores BEFORE opening the
+   * settlement transaction.
+   *
+   * refreshChallengeScores() uses the application-level
+   * database connection, so it must not run from inside
+   * the settlement transaction.
+   *
+   * The settlement transaction below re-reads the entries
+   * after this refresh has completed.
+   */
+  await refreshChallengeScores({
+    competitionId: competition.competitionId,
+    gameweek: competition.gameweek,
+    deadlineTime: competition.deadlineTime,
+    locked: true,
+  });
+
   await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(
@@ -437,20 +455,6 @@ export async function finalizeCompetition(
         `ከ${pendingPayments} ተሳታፊ(ዎች) የሚመጣ ክፍያ ገና አልተረጋገጠም። ከመጨረሻ ውሳኔ በፊት ክፍያዎቹን ያረጋግጡ።`,
       );
     }
-
-    const challenge: WeeklyChallenge =
-      {
-        competitionId,
-        gameweek:
-          lockedCompetition.gameweek,
-        deadlineTime:
-          lockedCompetition.deadlineTime,
-        locked: true,
-      };
-
-    await refreshChallengeScores(
-      challenge,
-    );
 
     const entries = await tx
       .select()
