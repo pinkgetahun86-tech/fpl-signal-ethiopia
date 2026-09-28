@@ -471,7 +471,7 @@ useEffect(() => {
             ይወዳደሩ።
           </p>
 
-          <div className="hero-stats">
+                    <div className="hero-stats">
             <div>
               <span>DEADLINE</span>
 
@@ -490,35 +490,48 @@ useEffect(() => {
               </small>
             </div>
 
-            
-<div>
-  <span>ENTRY FEE</span>
+            <div>
+              <span>ENTRY FEE</span>
 
-  <strong>
-    {competition
-      ? `${competition.entryFeeEtb} ETB`
-      : '—'}
-  </strong>
+              <strong>
+                {competition
+                  ? `${competition.entryFeeEtb} ETB`
+                  : '—'}
+              </strong>
 
-  <small>
-    የመግቢያ ክፍያ
-  </small>
-</div>
+              <small>
+                የመግቢያ ክፍያ
+              </small>
+            </div>
 
-<div>
-  <span>PRIZE POOL</span>
+            <div>
+              <span>PRIZE POOL</span>
 
-  <strong>
-    {competition
-      ? `${competition.prizePoolEtb} ETB`
-      : '—'}
-  </strong>
+              <strong>
+                {competition
+                  ? `${competition.prizePoolEtb} ETB`
+                  : '—'}
+              </strong>
 
-  <small>
-    የሽልማት ገንዘብ
-  </small>
-</div>
+              <small>
+                የሽልማት ገንዘብ
+              </small>
+            </div>
+          </div>
+
           <Link
+            href="/challenge"
+            className="button button-hero"
+            data-testid="button-start-team"
+          >
+            {challengeLocked
+              ? 'ውድድሩን እይ'
+              : isRegistered
+                ? 'ቡድኔን እይ'
+                : 'ወደ ውድድሩ ግባ'}
+
+            <ArrowRight className="h-4 w-4" />
+          </Link>
             href="/challenge"
             className="button button-hero"
             data-testid="button-start-team"
