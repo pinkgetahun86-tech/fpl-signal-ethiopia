@@ -306,9 +306,12 @@ const [loadingEntries, setLoadingEntries] =
     loadDeposits,
     loadWithdrawals,
   ]);
-
   useEffect(() => {
     if (!loggedIn || !token) return;
+
+    refreshAll();
+  }, [loggedIn, token, refreshAll]);
+
   const loadCompetitionEntries = useCallback(async () => {
     if (!token || !competitionFee?.competitionId) return;
 
