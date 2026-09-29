@@ -534,7 +534,24 @@ export async function getCurrentGameweek(): Promise<
 
   return selected;
 }
+export async function getGameweek(
+  gameweekId: number,
+): Promise<FplGameweek> {
+  const gameweeks =
+    (await loadBootstrap()).gameweeks;
 
+  const gameweek = gameweeks.find(
+    (item) => item.id === gameweekId,
+  );
+
+  if (!gameweek) {
+    throw new Error(
+      `FPL gameweek ${gameweekId} was not found`,
+    );
+  }
+
+  return gameweek;
+}
 /**
  * Loads the official FPL fixture state for one gameweek.
  *
