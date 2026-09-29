@@ -1158,38 +1158,33 @@ router.put(
               );
             }
 
-                        const confirmedEntries =
-              await tx
-                .select({
-                  id:
-                    weeklyChallengeEntries.id,
-                })
-                .from(
-                  weeklyChallengeEntries,
-                )
-                .where(
-                  and(
-                    eq(
-                      weeklyChallengeEntries.competitionId,
-                      current.id,
-                    ),
-                    eq(
-                      weeklyChallengeEntries.submissionStatus,
-                      "confirmed",
-                    ),
-                  ),
-                )
-                .limit(1);
+                        
+const paidEntries =
+  await tx
+    .select({
+      id:
+        walletTransactions.id,
+    })
+    .from(
+      walletTransactions,
+    )
+    .where(
+      and(
+        eq(
+          walletTransactions.type,
+          "entry_fee",
+        ),
+        sql`${walletTransactions.reference} LIKE ${`gw-entry:${current.id}:%`}`,
+      ),
+    )
+    .limit(1);
 
-            if (
-              confirmedEntries[0]
-            ) {
-              throw new MiniAppRequestError(
-                "በዚህ ውድድር ክፍያ አድርጎ የገባ ተሳታፊ ካለ Entry Fee መቀየር አይቻልም።",
-                409,
-              );
-            }
-
+if (paidEntries[0]) {
+  throw new MiniAppRequestError(
+    "በዚህ ውድድር የEntry Fee ክፍያ ከተፈጸመ Entry Fee መቀየር አይቻልም።",
+    409,
+  );
+}
             const rows =
               await tx
                 .update(
