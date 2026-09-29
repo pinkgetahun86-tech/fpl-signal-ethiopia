@@ -1094,7 +1094,111 @@ const [loadingEntries, setLoadingEntries] =
             )}
           </div>
         </section>
+        {/* GW COMPETITION ENTRIES */}
+        <section className="mb-8">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <div className="mb-5">
+              <h2 className="text-xl font-bold">
+                GW ተሳታፊዎች
+              </h2>
 
+              <p className="text-sm text-white/50">
+                የአሁኑ GW ተሳታፊ እና Wallet የEntry Fee ክፍያ ማረጋገጫ
+              </p>
+            </div>
+
+            {loadingEntries ? (
+              <div className="flex items-center gap-2 py-6 text-white/50">
+                <RefreshCw className="h-5 w-5 animate-spin" />
+                ተሳታፊዎችን በመጫን ላይ...
+              </div>
+            ) : competitionEntries.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-6 text-center text-sm text-white/40">
+                በዚህ GW ላይ የተመዘገበ ተሳታፊ የለም።
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {competitionEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-xl border border-white/10 bg-black/20 p-4"
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <div className="text-xs text-white/40">
+                          Entry ID
+                        </div>
+                        <div className="mt-1 font-semibold">
+                          #{entry.id}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-white/40">
+                          Telegram User ID
+                        </div>
+                        <div className="mt-1 font-semibold">
+                          {entry.telegramUserId}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-white/40">
+                          Submission Status
+                        </div>
+                        <div className="mt-1 font-semibold">
+                          {entry.submissionStatus}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs text-white/40">
+                          Wallet Payment
+                        </div>
+
+                        {entry.walletPayment ? (
+                          <div className="mt-1 font-semibold text-green-300">
+                            {entry.walletPayment.amountEtb} ETB
+                          </div>
+                        ) : (
+                          <div className="mt-1 font-semibold text-red-300">
+                            ❌ ክፍያ የለም
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {entry.walletPayment && (
+                      <div className="mt-4 border-t border-white/10 pt-3 text-xs text-white/50">
+                        <div>
+                          Reference:{" "}
+                          <span className="text-white/70">
+                            {entry.walletPayment.reference}
+                          </span>
+                        </div>
+
+                        <div className="mt-1">
+                          Paid At:{" "}
+                          <span className="text-white/70">
+                            {new Date(
+                              entry.walletPayment.createdAt
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!entry.walletPayment && (
+                      <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                        ⚠️ Entry አለ፣ ግን ተመሳሳይ Wallet Entry Fee transaction አልተገኘም።
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
         {/* WALLET DEPOSITS */}
         <section className="mb-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
