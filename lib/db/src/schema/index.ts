@@ -54,7 +54,9 @@ export const weeklyChallengeEntries = pgTable(
       .default([]),
     captainPlayerId: integer("captain_player_id").notNull(),
     viceCaptainPlayerId: integer("vice_captain_player_id"),
-    submissionStatus: text("submission_status").notNull().default("confirmed"),
+    submissionStatus: text("submission_status")
+  .notNull()
+  .default("awaiting_payment"),
     points: integer("points").notNull().default(0),
     pointsSource: text("points_source").notNull().default("placeholder"),
     scoredPlayerIds: jsonb("scored_player_ids")
