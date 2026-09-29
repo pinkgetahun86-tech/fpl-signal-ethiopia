@@ -34,7 +34,8 @@ import {
   validatePlayerAddition,
 } from "./squad-rules";
 import { createWeeklyChallenge, type WeeklyChallenge } from "./weekly-challenge";
-import { ensureGwCompetition, PAID_COMPETITION_ENABLED } from "./gw-payment";
+import { ensureGwCompetition } from "./gw-payment";
+import { joinWeeklyChallengeWithWallet } from "./wallet";
 import type {
   TelegramCallbackQuery,
   TelegramInlineKeyboardButton,
@@ -167,7 +168,7 @@ export async function registerTeamForCurrentChallenge(
   viceCaptain: FplPlayer,
 ): Promise<boolean> {
   await ensureGwCompetition(challenge);
-  const targetStatus = PAID_COMPETITION_ENABLED ? "awaiting_payment" : "confirmed";
+  const targetStatus = "awaiting_payment";
   const teamValues = {
     gameweek: challenge.gameweek,
     selectedPlayerIds: selected.map((player) => player.id),
@@ -1262,25 +1263,64 @@ async function handleCallback(callbackQuery: TelegramCallbackQuery): Promise<voi
       return;
     }
     const bench = selected.filter((player) => !starting.some((starter) => starter.id === player.id));
-    const registeredNow = await registerTeamForCurrentChallenge(
-      user,
-      challenge,
-      selected,
-      starting,
-      bench,
-      captain,
-      viceCaptain,
-    );
-    const confirmedUser = await updateUser(chatId, { flowState: "team_confirmed" });
-    await sendConfirmationScreen(
-      chatId,
-      confirmedUser,
-      true,
-      players,
-      registeredNow
-        ? undefined
-        : "✅ የቡድን ማስተካከያዎ ተቀምጧል። የዚህ ሳምንት ውድድር በዚህ አዲሱ ቡድን ይቈጠራል።",
-    );
+    await registerTeamForCurrentChallenge(
+  user,
+  challenge,
+  selected,
+  starting,
+  bench,
+  captain,
+  viceCaptain,
+);
+
+const entry = await db
+  .select({ id: weeklyChallengeEntries.id })
+  .from(weeklyChallengeEntries)
+  .where(
+    and(
+      eq(weeklyChallengeEntries.telegramUserId, user.id),
+      eq(weeklyChallengeEntries.competitionId, challenge.competitionId),
+    ),
+  )
+  .limit(1)
+  .then((rows) => rows[0]);
+
+if (!entry) {
+  await sendMessage(
+    chatId,
+    "⚠️ የቡድን ምዝገባው አልተገኘም። እባክዎ እንደገና ይሞክሩ።",
+  );
+  return;
+}
+
+try {
+  await joinWeeklyChallengeWithWallet(
+    challenge.competitionId,
+    user.id,
+    entry.id,
+  );
+} catch (error) {
+  const message =
+    error instanceof Error ? error.message : String(error);
+
+  await sendMessage(
+    chatId,
+    `⚠️ ${message}\n\n💳 የWallet ክፍያ ሳይረጋገጥ ውድድሩ አይገቡም።`,
+  );
+  return;
+}
+
+const confirmedUser = await updateUser(chatId, {
+  flowState: "team_confirmed",
+});
+
+await sendConfirmationScreen(
+  chatId,
+  confirmedUser,
+  true,
+  players,
+  "✅ የቡድንዎ ተመዝግቦ የGW መግቢያ ክፍያ ከWallet ተቀንሷል።",
+);
     return;
   }
 
