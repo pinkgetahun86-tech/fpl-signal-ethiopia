@@ -18,7 +18,6 @@ import { calculateTop20PrizeShares } from "./prize-distribution";
 
 type DbTransaction =
   Parameters<Parameters<typeof db.transaction>[0]>[0];
-
 export async function syncCompetitionLifecycle(
   challenge: WeeklyChallenge,
 ): Promise<string> {
@@ -38,33 +37,57 @@ export async function syncCompetitionLifecycle(
     return competition.status;
   }
 
-  const fpl = await getCurrentGameweek();
+  /*
+   * Always inspect the competition's own FPL gameweek.
+   *
+   * Do not use getCurrentGameweek() here because FPL can
+   * already have advanced to the next gameweek while this
+   * competition still needs to be locked/settled.
+   */
+  const fpl = await getGameweek(
+    competition.gameweek,
+  );
 
-  if (fpl.id !== competition.gameweek) {
-    return competition.status;
-  }
+  const shouldBeLocked =
+    fpl.finished ||
+    (
+      fpl.deadlineTime !== null &&
+      Date.now() >=
+        fpl.deadlineTime.getTime()
+    );
 
-  if (!challenge.locked && competition.status !== "open") {
-    await db
-      .update(gwCompetitions)
-      .set({
-        status: "open",
-        updatedAt: new Date(),
-      })
-      .where(eq(gwCompetitions.id, competition.id));
-
-    return "open";
-  }
-
-  if (challenge.locked && competition.status === "open") {
+  if (
+    shouldBeLocked &&
+    competition.status === "open"
+  ) {
     await db
       .update(gwCompetitions)
       .set({
         status: "locked",
         updatedAt: new Date(),
       })
-      .where(eq(gwCompetitions.id, competition.id));
+      .where(
+        and(
+          eq(
+            gwCompetitions.id,
+            competition.id,
+          ),
+          eq(
+            gwCompetitions.status,
+            "open",
+          ),
+        ),
+      );
+
+    return "locked";
   }
+
+  if (!shouldBeLocked) {
+    return competition.status;
+  }
+
+  return competition.status;
+}
 
   return challenge.locked ? "locked" : "open";
 }
