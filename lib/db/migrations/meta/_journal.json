@@ -43,4 +43,13 @@
       "when": 1789384351000,
       "tag": "0005_fix_gw_entry_payment_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789384352000,
+      "tag": "0006_repair_unpaid_gw6_entries",
+      "breakpoints": true
     }
+  ]
+}
