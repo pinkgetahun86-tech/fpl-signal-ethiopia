@@ -415,8 +415,15 @@ export default function AdminPage() {
       );
     } catch (err) {
       console.error(err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : String(err);
+
       setError(
-        "Entry Fee መቀየር አልተቻለም። ተሳታፊ ከገባ ወይም Competition ከተዘጋ መቀየር አይቻልም።"
+        message ||
+          "Entry Fee መቀየር አልተቻለም።"
       );
     } finally {
       setSavingFee(false);
