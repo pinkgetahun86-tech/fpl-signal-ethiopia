@@ -15,6 +15,7 @@ import {
 } from "./client";
 import {
   getCurrentGameweek,
+  getGameweek,
   getFplPlayers,
   getLiveGameweekStats,
   type FplPlayer,
@@ -1452,26 +1453,72 @@ function startLeaderServices(): void {
 
 async function scheduledScoreRefresh(): Promise<void> {
   let current: WeeklyChallenge | undefined;
+
   try {
+    const {
+      syncCompetitionLifecycle,
+      finalizeCompetition,
+    } = await import("./gw-settlement");
+
     current = await getCurrentChallenge();
     await ensureGwCompetition(current);
+    await syncCompetitionLifecycle(current);
     await refreshChallengeScores(current);
-  } catch (error) {
-    logger.warn({ error }, "Current Weekly Challenge score refresh skipped");
-  }
 
-  if (current && current.gameweek > 1) {
-    try {
-      await refreshChallengeScores(createWeeklyChallenge({
-        id: current.gameweek - 1,
-        deadlineTime: null,
-        isCurrent: false,
-        isNext: false,
-        finished: true,
-      }));
-    } catch (error) {
-      logger.warn({ error, gameweek: current.gameweek - 1 }, "Previous Weekly Challenge score refresh skipped");
+    if (current.gameweek > 1) {
+      const previousFpl = await getGameweek(
+        current.gameweek - 1,
+      );
+
+      const previousChallenge =
+        createWeeklyChallenge(previousFpl);
+
+      const lifecycle =
+        await syncCompetitionLifecycle(
+          previousChallenge,
+        );
+
+      await refreshChallengeScores(
+        previousChallenge,
+      );
+
+      if (
+        lifecycle === "locked" &&
+        previousFpl.finished
+      ) {
+        try {
+          await finalizeCompetition(
+            previousChallenge.competitionId,
+          );
+
+          logger.info(
+            {
+              gameweek:
+                previousChallenge.gameweek,
+              competitionId:
+                previousChallenge.competitionId,
+            },
+            "Previous Weekly Challenge finalized automatically",
+          );
+        } catch (error) {
+          logger.warn(
+            {
+              error,
+              gameweek:
+                previousChallenge.gameweek,
+              competitionId:
+                previousChallenge.competitionId,
+            },
+            "Previous Weekly Challenge automatic settlement skipped",
+          );
+        }
+      }
     }
+  } catch (error) {
+    logger.warn(
+      { error },
+      "Weekly Challenge score refresh skipped",
+    );
   }
 }
 
