@@ -104,9 +104,7 @@ export function isPaidCompetitionReady(): boolean {
 export async function ensureGwCompetition(
   challenge: WeeklyChallenge,
 ): Promise<GwCompetition> {
-  const defaultFee = PAID_COMPETITION_ENABLED
-    ? getConfiguredEntryFeeEtb()
-    : 0;
+  const defaultFee = 0;
 
   const existing = await db
     .select()
