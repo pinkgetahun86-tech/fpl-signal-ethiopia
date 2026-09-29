@@ -343,8 +343,6 @@ const [loadingEntries, setLoadingEntries] =
       setLoadingEntries(false);
     }
   }, [token, competitionFee?.competitionId]);
-    refreshAll();
-  }, [loggedIn, token, refreshAll]);
 
   useEffect(() => {
     if (!loggedIn || !token || !competitionFee?.competitionId) {
