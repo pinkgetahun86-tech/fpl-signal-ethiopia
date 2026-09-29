@@ -55,7 +55,18 @@ type CompetitionFee = {
   locked: boolean;
   deadlineTime?: string | null;
 };
-
+type CompetitionEntry = {
+  id: number;
+  telegramUserId: number;
+  gameweek: number;
+  submissionStatus: string;
+  registeredAt?: string;
+  walletPayment?: {
+    reference: string;
+    amountEtb: number;
+    createdAt: string;
+  } | null;
+};
 type PrizeSettlement = {
   id: number;
   competitionId: string;
@@ -126,7 +137,11 @@ export default function AdminPage() {
   const [settlements, setSettlements] = useState<
     PrizeSettlement[]
   >([]);
+const [competitionEntries, setCompetitionEntries] =
+  useState<CompetitionEntry[]>([]);
 
+const [loadingEntries, setLoadingEntries] =
+  useState(false);
   const [competitionFee, setCompetitionFee] =
     useState<CompetitionFee | null>(null);
 
@@ -294,7 +309,37 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!loggedIn || !token) return;
+  const loadCompetitionEntries = useCallback(async () => {
+    if (!token || !competitionFee?.competitionId) return;
 
+    setLoadingEntries(true);
+
+    try {
+      const response = await customFetch<{
+        competitionId: string;
+        entries: CompetitionEntry[];
+      }>(
+        `/api/admin/gw/${competitionFee.competitionId}/entries`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+          responseType: "json",
+        }
+      );
+
+      setCompetitionEntries(response.entries ?? []);
+    } catch (err) {
+      console.error(err);
+      setError(
+        "የGW ተሳታፊዎችን መረጃ ማምጣት አልተቻለም።"
+      );
+    } finally {
+      setLoadingEntries(false);
+    }
+  }, [token, competitionFee?.competitionId]);
     refreshAll();
   }, [loggedIn, token, refreshAll]);
 
@@ -304,12 +349,13 @@ export default function AdminPage() {
       return;
     }
 
-    loadSettlements();
+        loadSettlements();
+    loadCompetitionEntries();
   }, [
     loggedIn,
     token,
     competitionFee?.competitionId,
-    loadSettlements,
+    loadSettlements,    loadCompetitionEntries,
   ]);
 
   const login = () => {
