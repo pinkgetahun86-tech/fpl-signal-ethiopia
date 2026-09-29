@@ -7,6 +7,7 @@ import {
   gwPrizeSettlements,
   weeklyChallengeEntries,
   walletDeposits,
+  walletTransactions,
   walletWithdrawals,
 } from "@workspace/db";
 import { GetMiniAppBootstrapResponse } from "@workspace/api-zod";
@@ -1263,7 +1264,107 @@ router.put(
     }
   },
 );
+/* ------------------------- GW Competition Entries ------------------------ */
 
+router.get(
+  "/admin/gw/:competitionId/entries",
+  async (req, res) => {
+    if (!requireAdmin(req)) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    try {
+      const competitionId =
+        String(req.params.competitionId || "").trim();
+
+      if (!competitionId) {
+        return res.status(400).json({
+          error: "Competition ID is required",
+        });
+      }
+
+      const entries = await db
+        .select({
+          id: weeklyChallengeEntries.id,
+          telegramUserId:
+            weeklyChallengeEntries.telegramUserId,
+          gameweek:
+            weeklyChallengeEntries.gameweek,
+          submissionStatus:
+            weeklyChallengeEntries.submissionStatus,
+          registeredAt:
+            weeklyChallengeEntries.registeredAt,
+        })
+        .from(weeklyChallengeEntries)
+        .where(
+          eq(
+            weeklyChallengeEntries.competitionId,
+            competitionId,
+          ),
+        )
+        .orderBy(
+          desc(
+            weeklyChallengeEntries.registeredAt,
+          ),
+        );
+
+      const result = await Promise.all(
+        entries.map(async (entry) => {
+          const payments = await db
+            .select({
+              reference:
+                walletTransactions.reference,
+              amountEtb:
+                walletTransactions.amountEtb,
+              createdAt:
+                walletTransactions.createdAt,
+            })
+            .from(walletTransactions)
+            .where(
+              and(
+                eq(
+                  walletTransactions.telegramUserId,
+                  entry.telegramUserId,
+                ),
+                eq(
+                  walletTransactions.type,
+                  "entry_fee",
+                ),
+                eq(
+                  walletTransactions.reference,
+                  `gw-entry:${competitionId}:${entry.telegramUserId}`,
+                ),
+              ),
+            )
+            .limit(1);
+
+          return {
+            ...entry,
+            walletPayment:
+              payments[0] ?? null,
+          };
+        }),
+      );
+
+      return res.json({
+        competitionId,
+        entries: result,
+      });
+    } catch (error) {
+      logger.error(
+        { error },
+        "Could not load GW competition entries",
+      );
+
+      return res.status(500).json({
+        error:
+          "Could not load GW competition entries",
+      });
+    }
+  },
+);
 /* ------------------------------ Deposits --------------------------------- */
 
 router.get(
