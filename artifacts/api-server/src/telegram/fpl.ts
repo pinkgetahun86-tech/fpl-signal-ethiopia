@@ -6,6 +6,9 @@ const FPL_BOOTSTRAP_URL =
 const FPL_LIVE_EVENT_URL = (gameweek: number) =>
   `https://fantasy.premierleague.com/api/event/${gameweek}/live/`;
 
+const FPL_FIXTURES_URL = (gameweek: number) =>
+  `https://fantasy.premierleague.com/api/fixtures/?event=${gameweek}`;
+
 const BOOTSTRAP_CACHE_TTL_MS = 10 * 60 * 1000;
 const LIVE_CACHE_TTL_MS = 60 * 1000;
 
@@ -88,6 +91,14 @@ type RawFplEvent = {
   is_current?: unknown;
   is_next?: unknown;
   finished?: unknown;
+};
+
+type RawFplFixture = {
+  event?: unknown;
+  finished?: unknown;
+  started?: unknown;
+  team_h?: unknown;
+  team_a?: unknown;
 };
 
 type RawLiveElement = {
@@ -524,6 +535,101 @@ export async function getCurrentGameweek(): Promise<
   return selected;
 }
 
+/**
+ * Loads the official FPL fixture state for one gameweek.
+ *
+ * We use this only to distinguish:
+ *
+ * 1. A player who genuinely did not play after his club's
+ *    fixture finished -> safe to represent as 0 points.
+ *
+ * 2. A player whose fixture has not finished yet or whose
+ *    fixture state cannot be verified -> do NOT invent 0 points.
+ */
+async function fetchGameweekFixtures(
+  gameweek: number,
+): Promise<Map<number, boolean>> {
+  const response = await fetch(
+    FPL_FIXTURES_URL(gameweek),
+    {
+      headers: {
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(12_000),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `FPL fixtures for gameweek ${gameweek} returned HTTP ${response.status}`,
+    );
+  }
+
+  const payload: unknown = await response.json();
+
+  if (!Array.isArray(payload)) {
+    throw new Error(
+      `FPL fixtures for gameweek ${gameweek} were not an array`,
+    );
+  }
+
+  const fixtureFinishedByTeam = new Map<
+    number,
+    boolean
+  >();
+
+  for (
+    const rawFixture of payload as RawFplFixture[]
+  ) {
+    const homeTeamId = asPositiveInteger(
+      rawFixture.team_h,
+    );
+    const awayTeamId = asPositiveInteger(
+      rawFixture.team_a,
+    );
+
+    if (!homeTeamId || !awayTeamId) {
+      continue;
+    }
+
+    const finished =
+      rawFixture.finished === true;
+
+    /*
+     * If a team appears in more than one fixture
+     * for any unexpected API reason, only mark it
+     * finished when every known fixture is finished.
+     */
+    const previousHome =
+      fixtureFinishedByTeam.get(homeTeamId);
+
+    fixtureFinishedByTeam.set(
+      homeTeamId,
+      previousHome === undefined
+        ? finished
+        : previousHome && finished,
+    );
+
+    const previousAway =
+      fixtureFinishedByTeam.get(awayTeamId);
+
+    fixtureFinishedByTeam.set(
+      awayTeamId,
+      previousAway === undefined
+        ? finished
+        : previousAway && finished,
+    );
+  }
+
+  if (fixtureFinishedByTeam.size === 0) {
+    throw new Error(
+      `FPL fixtures for gameweek ${gameweek} contained no valid fixtures`,
+    );
+  }
+
+  return fixtureFinishedByTeam;
+}
+
 async function fetchLiveGameweekStats(
   gameweek: number,
 ): Promise<Map<number, FplLivePlayerStats>> {
@@ -690,6 +796,59 @@ async function fetchLiveGameweekStats(
     throw new Error(
       `FPL live gameweek ${gameweek} contained no player statistics`,
     );
+  }
+
+  /*
+   * IMPORTANT:
+   *
+   * The live endpoint does not always contain an entry
+   * for every player, especially players who did not play.
+   *
+   * We must NOT blindly convert every missing player
+   * into 0 points because a missing response can also
+   * indicate an FPL data/API problem.
+   *
+   * Therefore we verify the official fixture state first.
+   */
+  const fixtureFinishedByTeam =
+    await fetchGameweekFixtures(gameweek);
+
+  if (snapshot) {
+    for (const player of snapshot.players) {
+      if (stats.has(player.id)) {
+        continue;
+      }
+
+      const fixtureFinished =
+        fixtureFinishedByTeam.get(
+          player.clubId,
+        );
+
+      /*
+       * Only a completed club fixture allows us
+       * to safely conclude that the player did not
+       * appear and therefore has 0 FPL points.
+       *
+       * If the fixture is unknown or unfinished,
+       * leave the player missing. Scoring will fail
+       * safely rather than inventing a result.
+       */
+      if (fixtureFinished === true) {
+        stats.set(player.id, {
+          minutes: 0,
+          totalPoints: 0,
+        });
+
+        logger.info(
+          {
+            gameweek,
+            playerId: player.id,
+            clubId: player.clubId,
+          },
+          "Filled missing FPL live stats as zero after completed fixture",
+        );
+      }
+    }
   }
 
   liveStatsCache.set(
