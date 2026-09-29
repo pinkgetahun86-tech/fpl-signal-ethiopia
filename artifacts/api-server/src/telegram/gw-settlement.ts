@@ -8,7 +8,10 @@ import {
   walletAccounts,
   walletTransactions,
 } from "@workspace/db";
-import { getCurrentGameweek } from "./fpl";
+import {
+  getCurrentGameweek,
+  getGameweek,
+} from "./fpl";
 import { refreshChallengeScores } from "./bot";
 import { type WeeklyChallenge } from "./weekly-challenge";
 import { calculateTop20PrizeShares } from "./prize-distribution";
@@ -379,17 +382,15 @@ export async function finalizeCompetition(
     };
   }
 
-  const fpl = await getCurrentGameweek();
+    const fpl = await getGameweek(
+    competition.gameweek,
+  );
 
-  if (
-    fpl.id === competition.gameweek &&
-    !fpl.finished
-  ) {
+  if (!fpl.finished) {
     throw new Error(
       "የዚህ የጨዋታ ሳምንት ውጤት ገና አልተጠናቀቀም።",
     );
   }
-
   if (competition.status === "open") {
     throw new Error(
       "ውድድሩ ገና አልተዘጋም።",
