@@ -1157,7 +1157,7 @@ router.put(
               );
             }
 
-            const existingEntries =
+                        const confirmedEntries =
               await tx
                 .select({
                   id:
@@ -1167,18 +1167,24 @@ router.put(
                   weeklyChallengeEntries,
                 )
                 .where(
-                  eq(
-                    weeklyChallengeEntries.competitionId,
-                    current.id,
+                  and(
+                    eq(
+                      weeklyChallengeEntries.competitionId,
+                      current.id,
+                    ),
+                    eq(
+                      weeklyChallengeEntries.submissionStatus,
+                      "confirmed",
+                    ),
                   ),
                 )
                 .limit(1);
 
             if (
-              existingEntries[0]
+              confirmedEntries[0]
             ) {
               throw new MiniAppRequestError(
-                "በዚህ ውድድር ተሳታፊ ከተመዘገበ በኋላ Entry Fee መቀየር አይቻልም።",
+                "በዚህ ውድድር ክፍያ አድርጎ የገባ ተሳታፊ ካለ Entry Fee መቀየር አይቻልም።",
                 409,
               );
             }
