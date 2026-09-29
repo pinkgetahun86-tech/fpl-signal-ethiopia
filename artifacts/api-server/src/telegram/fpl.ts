@@ -872,67 +872,83 @@ async function fetchLiveGameweekStats(
 
 export async function getLiveGameweekStats(
   gameweek: number,
+  allowStale = true,
 ): Promise<
   Map<number, FplLivePlayerStats>
 > {
-  const cached =
-    liveStatsCache.get(gameweek);
+  /*
+   * Normal Mini App reads may use the short-lived cache.
+   * Strict settlement bypasses it so the final score refresh
+   * always asks FPL for current live data.
+   */
+  if (allowStale) {
+    const cached =
+      liveStatsCache.get(gameweek);
 
-  if (
-    cached &&
-    Date.now() - cached.loadedAt <
-      LIVE_CACHE_TTL_MS
-  ) {
-    return cached.stats;
+    if (
+      cached &&
+      Date.now() - cached.loadedAt <
+        LIVE_CACHE_TTL_MS
+    ) {
+      return cached.stats;
+    }
   }
 
-  const existingRequest =
-    liveStatsRequests.get(gameweek);
+  /*
+   * A strict settlement must not join a tolerant request,
+   * because that request may legitimately fall back to stale
+   * data after an FPL outage.
+   */
+  if (allowStale) {
+    const existingRequest =
+      liveStatsRequests.get(gameweek);
 
-  if (existingRequest) {
-    return existingRequest;
+    if (existingRequest) {
+      return existingRequest;
+    }
   }
 
   const request =
     fetchLiveGameweekStats(gameweek)
       .catch((error) => {
-        /*
-         * If FPL is temporarily unavailable after
-         * a successful live response, keep the last
-         * known points rather than failing the Mini App.
-         */
-        const stale =
-          liveStatsCache.get(gameweek);
+        if (allowStale) {
+          const stale =
+            liveStatsCache.get(gameweek);
 
-        if (
-          stale &&
-          stale.stats.size > 0
-        ) {
-          logger.warn(
-            {
-              error,
-              gameweek,
-              loadedAt:
-                stale.loadedAt,
-            },
-            "FPL live stats unavailable; using stale cached points",
-          );
+          if (
+            stale &&
+            stale.stats.size > 0
+          ) {
+            logger.warn(
+              {
+                error,
+                gameweek,
+                loadedAt:
+                  stale.loadedAt,
+              },
+              "FPL live stats unavailable; using stale cached points",
+            );
 
-          return stale.stats;
+            return stale.stats;
+          }
         }
 
         throw error;
       })
       .finally(() => {
-        liveStatsRequests.delete(
-          gameweek,
-        );
+        if (allowStale) {
+          liveStatsRequests.delete(
+            gameweek,
+          );
+        }
       });
 
-  liveStatsRequests.set(
-    gameweek,
-    request,
-  );
+  if (allowStale) {
+    liveStatsRequests.set(
+      gameweek,
+      request,
+    );
+  }
 
   return request;
 }
