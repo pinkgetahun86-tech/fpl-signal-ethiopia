@@ -317,7 +317,10 @@ async function refreshChallengeScoresInternal(
 
 let liveStats;
 try {
-  liveStats = await getLiveGameweekStats(challenge.gameweek);
+  liveStats = await getLiveGameweekStats(
+  challenge.gameweek,
+  !strict,
+);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
 
