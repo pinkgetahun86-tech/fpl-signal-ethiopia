@@ -89,8 +89,7 @@ export async function syncCompetitionLifecycle(
   return competition.status;
 }
 
-  return challenge.locked ? "locked" : "open";
-}
+  
 
 /**
  * Credits one prize settlement to the winner wallet
